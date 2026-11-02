@@ -38,6 +38,10 @@
 .liquid:active { transform: scale(0.985); }
 div.liquid:hover, li.liquid:hover { transform: translateY(-2px) scale(1.012); box-shadow: 0 10px 24px -10px rgba(6, 78, 59, 0.35); z-index: 5; }
 button.liquid:hover { transform: translateY(-1px) scale(1.04); }
+.main-tab {
+  flex: 0 0 auto;
+  transform-origin: bottom center;
+}
 /* table rows: pointer-following glass painted as the row background */
 tr.liquid::after { display: none; }
 tr.liquid:hover {

@@ -33,14 +33,14 @@ export default function App() {
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-300">Inter-School Football Competition 2026–2027</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Division Three (HK) · Boys A Grade</h1>
           <p className="mt-1 text-sm text-emerald-200/80">Group stage results and final round (single knock-out)</p>
-          <nav className="mt-7 flex gap-1 overflow-x-auto" role="tablist">
+          <nav className="-mx-2 mt-5 flex gap-1 overflow-x-auto px-2 pt-2" role="tablist">
             {(['group', 'knockout', 'stats', 'simulation'] as Tab[]).map((t) => (
               <button
                 key={t}
                 role="tab"
                 aria-selected={tab === t}
                 onClick={() => setTab(t)}
-                className={`liquid liquid-dark rounded-t-lg px-5 py-2.5 text-sm font-medium ${
+                className={`main-tab liquid liquid-dark rounded-t-lg px-5 py-2.5 text-sm font-medium ${
                   tab === t ? 'bg-stone-50 text-emerald-950' : 'text-emerald-100'
                 }`}
               >
@@ -230,7 +230,7 @@ const U = 152
 const OFF = 12 // compact gap between round headings and the first bye card
 const EDGE_PAD = 28
 const colX = (c: number) => EDGE_PAD + c * (CARD_W + GAP)
-const BYE_H = 96
+const BYE_H = 84
 const TOTAL_W = colX(3) + CARD_W + EDGE_PAD
 const TOTAL_H = 8 * U + OFF + 20
 
@@ -577,13 +577,15 @@ function Knockout({ onTeam, onMatch }: { onTeam: (t: string) => void; onMatch: (
             </svg>
 
             {byes.map((b) => (
-              <div key={b.name} className="liquid absolute rounded-lg border border-emerald-300 bg-emerald-50 px-4 pb-4 pt-3" style={{ left: colX(0), top: b.y - BYE_H / 2, width: CARD_W, height: BYE_H }}>
+              <div key={b.name} className="liquid absolute rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3" style={{ left: colX(0), top: b.y - BYE_H / 2, width: CARD_W, height: BYE_H }}>
+                <div className="flex h-full flex-col justify-center">
                 <div className="flex items-center justify-between">
                   <TeamBtn name={b.name} onTeam={onTeam} className="text-base" />
                   <span className="rounded bg-emerald-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">Bye</span>
                 </div>
                 <div className="mt-1 text-xs leading-snug text-stone-600">{b.seed}</div>
                 <div className="text-xs leading-snug text-stone-600">Direct to quarter-final</div>
+                </div>
               </div>
             ))}
 
@@ -784,13 +786,68 @@ function TeamPanel({ team, onClose, onTeam }: { team: string; onClose: () => voi
 
 function KoLine({ m, team, onTeam }: { m: KoMatch; team: string; onTeam: (t: string) => void }) {
   const h = slotTeam(m.home), a = slotTeam(m.away)
-  const part = (s: Slot, t: string | null) =>
-    t ? (t === team ? <strong>{t}</strong> : <TeamBtn name={t} onTeam={onTeam} />) : <span className="italic text-stone-500">{describeSource(s)}</span>
+  const candidates = (slot: Slot) => {
+    if (slot.kind === 'team' || slotTeam(slot)) return null
+    const source = koById(slot.of)
+    const first = slotTeam(source.home), second = slotTeam(source.away)
+    return first && second ? [first, second] : null
+  }
+  const sourceLines = (slot: Slot & { kind: 'winner' | 'loser' }) => {
+    const source = koById(slot.of)
+    const verb = slot.kind === 'winner' ? 'Winner of' : 'Loser of'
+    return source.round === 'R14'
+      ? [`${verb} Round of 14`, source.label.split(' – ')[1]]
+      : [verb, source.label]
+  }
+  const teamName = (name: string, className = '') =>
+    name === team
+      ? <strong className={className}>{name}</strong>
+      : <TeamBtn name={name} onTeam={onTeam} className={className} />
+  const side = (slot: Slot, resolved: string | null, align: 'left' | 'right') => {
+    const options = candidates(slot)
+    const alignment = align === 'right' ? 'items-end text-right' : 'items-start text-left'
+    let caption: string[] | null = null
+    let content: ReactNode
+    if (options) {
+      content = (
+        <ul className={`flex flex-col gap-1.5 ${alignment}`}>
+          {options.map((name) => (
+            <li key={name}>
+              <div>{teamName(name, 'text-sm')}</div>
+              <div className="text-[11px] text-stone-500">{groupSeed(name)}</div>
+            </li>
+          ))}
+        </ul>
+      )
+      caption = sourceLines(slot as Slot & { kind: 'winner' | 'loser' })
+    } else if (resolved) {
+      content = (
+        <div className={alignment}>
+          <div>{teamName(resolved)}</div>
+          <div className="text-[11px] text-stone-500">{groupSeed(resolved)}</div>
+        </div>
+      )
+      if (slot.kind === 'team' && slot.seed.endsWith(' – bye')) caption = ['BYE']
+      else if (slot.kind !== 'team') caption = sourceLines(slot)
+    } else {
+      content = <span className={`text-sm italic text-stone-500 ${align === 'right' ? 'text-right' : 'text-left'}`}>{describeSource(slot)}</span>
+    }
+    return (
+      <div className={`flex min-w-0 flex-col ${alignment}`}>
+        <div className="flex min-h-12 items-center">{content}</div>
+        {caption && (
+          <p className="mt-2 w-full max-w-40 border-t border-stone-200 pt-1.5 text-center text-[11px] italic leading-snug text-stone-500">
+            {caption.map((line) => <span key={line} className="block">{line}</span>)}
+          </p>
+        )}
+      </div>
+    )
+  }
   return (
-    <div className="flex flex-wrap items-center gap-x-2">
-      {part(m.home, h)}
+    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+      {side(m.home, h, 'left')}
       <span className="font-semibold tabular-nums text-stone-700">{m.score ? `${m.score[0]} – ${m.score[1]}` : 'v'}</span>
-      {part(m.away, a)}
+      {side(m.away, a, 'right')}
     </div>
   )
 }
@@ -833,6 +890,7 @@ function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClose: () =
   let title = '', subtitle = '', date = '', time = '', venue = '', status = ''
   let home: string | null = null, away: string | null = null
   let homeLabel = '', awayLabel = '', score = 'v', extra: string[] = [], homeSeed = '', awaySeed = ''
+  let homeSlot: Slot | null = null, awaySlot: Slot | null = null
 
   if (detail.kind === 'group') {
     const m = detail.m
@@ -848,6 +906,7 @@ function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClose: () =
     date = m.date; time = m.time; venue = VENUES[m.venue]
     home = slotTeam(m.home); away = slotTeam(m.away)
     homeLabel = home ?? describeSource(m.home); awayLabel = away ?? describeSource(m.away)
+    homeSlot = m.home; awaySlot = m.away
     if (m.home.kind === 'team') homeSeed = m.home.seed
     if (m.away.kind === 'team') awaySeed = m.away.seed
     if (m.score) score = `${m.score[0]} : ${m.score[1]}`
@@ -860,16 +919,75 @@ function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClose: () =
     if (!m.score) extra.push('Knockout matches are decided on the day; the first-named team is the home team.')
   }
 
-  const side = (name: string | null, label: string, seed: string, align: string) => (
-    <div className={`flex-1 ${align}`}>
-      {name ? <TeamBtn name={name} onTeam={onTeam} className="text-xl" /> : <span className="text-sm italic text-stone-500">{label}</span>}
-      {seed && <div className="mt-0.5 text-xs text-stone-500">{seed}</div>}
+  // Exactly two possible occupants: the feeder match has both teams confirmed
+  // but has not been decided yet.
+  const candidates = (slot: Slot | null): { teams: string[]; label: string } | null => {
+    if (!slot || slot.kind === 'team' || slotTeam(slot)) return null
+    const src = koById(slot.of)
+    const a = slotTeam(src.home), b = slotTeam(src.away)
+    if (!a || !b) return null
+    return { teams: [a, b], label: `${slot.kind === 'winner' ? 'Winner' : 'Loser'} of ${src.label}` }
+  }
+
+  const sourceLines = (slot: Slot & { kind: 'winner' | 'loser' }): string[] => {
+    const src = koById(slot.of)
+    const verb = slot.kind === 'winner' ? 'Winner of' : 'Loser of'
+    if (src.round === 'R14') return [`${verb} Round of 14`, src.label.split(' – ')[1]]
+    return [verb, src.label]
+  }
+
+  // Each side has a main area (aligned with the score) and an optional caption
+  // beneath it, so captions on both sides sit on a shared baseline.
+  const sideParts = (name: string | null, label: string, seed: string, align: 'left' | 'right', slot: Slot | null) => {
+    const justify = align === 'right' ? 'justify-end' : 'justify-start'
+    const textAlign = align === 'right' ? 'text-right' : 'text-left'
+    const options = candidates(slot)
+    let main: ReactNode
+    let caption: string[] | null = null
+    if (options) {
+      main = (
+        <ul className="space-y-2">
+          {options.teams.map((t) => (
+            <li key={t} className={textAlign}>
+              <TeamBtn name={t} onTeam={onTeam} className="text-lg" />
+              <div className="text-xs text-stone-500">{groupSeed(t)}</div>
+            </li>
+          ))}
+        </ul>
+      )
+      caption = sourceLines(slot as Slot & { kind: 'winner' | 'loser' })
+    } else {
+      const shownSeed = seed || (name ? groupSeed(name) : '')
+      main = (
+        <div className={textAlign}>
+          {name ? <TeamBtn name={name} onTeam={onTeam} className="text-xl" /> : <span className="text-sm italic text-stone-500">{label}</span>}
+          {shownSeed && <div className="mt-0.5 text-xs text-stone-500">{shownSeed}</div>}
+        </div>
+      )
+      if (slot && name) {
+        if (slot.kind === 'team') caption = slot.seed.endsWith(' – bye') ? ['BYE'] : ['Qualified as', slot.seed]
+        else caption = sourceLines(slot)
+      }
+    }
+    return { main: <div className={`flex items-center ${justify}`}>{main}</div>, caption, justify }
+  }
+
+  const left = sideParts(home, homeLabel, homeSeed, 'left', homeSlot)
+  const right = sideParts(away, awayLabel, awaySeed, 'right', awaySlot)
+  const hasCaption = Boolean(left.caption || right.caption)
+  const captionBox = (lines: string[] | null, justify: string) => (
+    <div className={`flex ${justify}`}>
+      {lines && (
+        <p className="mt-3 w-48 border-t border-stone-200 pt-2 text-center text-xs italic leading-snug text-stone-500">
+          {lines.map((l) => <span key={l} className="block">{l}</span>)}
+        </p>
+      )}
     </div>
   )
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-900/30 p-4 backdrop-blur-[2px]" onClick={onClose}>
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/60 bg-white/90 shadow-2xl backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-white/60 bg-white/90 shadow-2xl backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} aria-label="Close" className="liquid absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-stone-600">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M2 2l10 10M12 2L2 12" /></svg>
         </button>
@@ -877,13 +995,20 @@ function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClose: () =
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800">{title}</p>
           <p className="text-sm text-stone-500">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-3 px-6 py-5">
-          {side(home, homeLabel, homeSeed, 'text-left')}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 px-6 py-5">
+          {left.main}
           <div className="text-center">
             <div className="text-3xl font-semibold tabular-nums">{score}</div>
             <div className="mt-1 text-[11px] uppercase tracking-wide text-stone-500">{status}</div>
           </div>
-          {side(away, awayLabel, awaySeed, 'text-right')}
+          {right.main}
+          {hasCaption && (
+            <>
+              {captionBox(left.caption, left.justify)}
+              <div />
+              {captionBox(right.caption, right.justify)}
+            </>
+          )}
         </div>
         <dl className="space-y-2 border-t border-stone-200 px-6 py-4 text-sm">
           <div className="flex gap-3"><dt className="w-16 text-stone-500">Date</dt><dd>{fmtDate(date, true)}</dd></div>
