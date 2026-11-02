@@ -1,0 +1,10 @@
+{
+  "description": "Track school tournament fixtures, schedules, scores, and venues across group and knockout stages, with team histories and projected paths to the final.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

@@ -1,0 +1,82 @@
+@import 'tailwindcss';
+
+@layer base {
+  html {
+    background: #022c22;
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    background: #fafaf9;
+    overscroll-behavior-y: none;
+  }
+}
+
+/* Liquid-glass hover: a pointer-following sheen that sits BEHIND content so text stays crisp */
+.liquid:not(.absolute) { position: relative; }
+.liquid {
+  isolation: isolate;
+  --mx: 50%;
+  --my: 50%;
+  transition: transform 0.45s cubic-bezier(0.22, 1.2, 0.36, 1), box-shadow 0.35s ease, background-color 0.3s ease;
+}
+.liquid::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(120px circle at var(--mx) var(--my), rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.06) 55%, transparent 75%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.5), transparent 50%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8), inset 0 1px 6px rgba(255, 255, 255, 0.9);
+  transition: opacity 0.3s ease;
+}
+.liquid:hover::after { opacity: 1; }
+.liquid:active { transform: scale(0.985); }
+div.liquid:hover, li.liquid:hover { transform: translateY(-2px) scale(1.012); box-shadow: 0 10px 24px -10px rgba(6, 78, 59, 0.35); z-index: 5; }
+button.liquid:hover { transform: translateY(-1px) scale(1.04); }
+/* table rows: pointer-following glass painted as the row background */
+tr.liquid::after { display: none; }
+tr.liquid:hover {
+  background-image:
+    radial-gradient(160px circle at var(--mx) var(--my), rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.07) 55%, transparent 80%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.5), transparent 50%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.liquid-dark::after {
+  background: radial-gradient(110px circle at var(--mx) var(--my), rgba(110, 231, 183, 0.28), rgba(110, 231, 183, 0.08) 55%, transparent 75%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.liquid-dark:hover { background-color: rgba(6, 78, 59, 0.6); }
+
+/* Quiet glass surfaces support the interactive liquid elements without
+   placing an animated layer over dense text or tabular data. */
+.glass-surface {
+  background-image:
+    radial-gradient(circle at 8% 0%, rgba(167, 243, 208, 0.13), transparent 28%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(250, 250, 249, 0.68));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 8px 28px -24px rgba(6, 78, 59, 0.55);
+  backdrop-filter: blur(10px) saturate(1.08);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.glass-surface:hover {
+  border-color: rgba(5, 150, 105, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 14px 34px -25px rgba(6, 78, 59, 0.65);
+}
+.glass-control {
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(236, 253, 245, 0.5));
+  backdrop-filter: blur(8px) saturate(1.15);
+}
+.glass-control:focus-within {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12), 0 10px 24px -18px rgba(6, 78, 59, 0.55);
+}
+@media (prefers-reduced-motion: reduce) {
+  .liquid, .liquid:hover { transform: none !important; }
+}
