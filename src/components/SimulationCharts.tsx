@@ -34,6 +34,7 @@ type Slice = {
 export function SimulationCharts({ run }: { run: SimulationRun }) {
   const [mode, setMode] = useState<"bar" | "team" | "position">("bar")
   const [metricKey, setMetricKey] = useState("champion")
+  const [finishMode, setFinishMode] = useState<"exact" | "orBetter">("orBetter")
   const [team, setTeam] = useState(run.aggregates[0].team)
   const [position, setPosition] = useState<FinishKey>("champion")
   const metric = SIM_METRICS.find((m) => m.key === metricKey)!
@@ -133,8 +134,53 @@ export function SimulationCharts({ run }: { run: SimulationRun }) {
           </select>
         )}
       </label>
+      {mode === "bar" && metric.finish && (
+        <div className="mb-5 rounded-lg border border-stone-200 bg-stone-50 p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">
+            How to count this finishing position
+          </p>
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="Finishing position calculation"
+          >
+            <button
+              onClick={() => setFinishMode("exact")}
+              aria-pressed={finishMode === "exact"}
+              className={`liquid rounded-full border px-3 py-1.5 text-sm ${
+                finishMode === "exact"
+                  ? "border-emerald-800 bg-emerald-800 text-white"
+                  : "border-stone-300 bg-white text-stone-700"
+              }`}
+            >
+              Finished exactly here
+            </button>
+            <button
+              onClick={() => setFinishMode("orBetter")}
+              aria-pressed={finishMode === "orBetter"}
+              className={`liquid rounded-full border px-3 py-1.5 text-sm ${
+                finishMode === "orBetter"
+                  ? "border-emerald-800 bg-emerald-800 text-white"
+                  : "border-stone-300 bg-white text-stone-700"
+              }`}
+            >
+              Finished here or better
+            </button>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-stone-600">
+            <strong>Exactly here</strong> counts simulations where this was the
+            team’s terminal result.
+            <strong className="ml-1">Here or better</strong> also includes every
+            higher finish. For example, quarter-final or better includes
+            quarter-final exits, fourth, third, runner-up and champion. Round of
+            14 or better is therefore 100% for every entered team, including
+            teams with byes; an exact Round of 14 exit remains 0% for SKHLMC and
+            CANADIAN.
+          </p>
+        </div>
+      )}
       {mode === "bar" ? (
-        <TeamBars run={run} metricKey={metricKey} />
+        <TeamBars run={run} metricKey={metricKey} finishMode={finishMode} />
       ) : (
         <>
           <p className="mb-5 text-sm text-stone-600">
@@ -171,14 +217,32 @@ export function SimulationCharts({ run }: { run: SimulationRun }) {
 export function TeamBars({
   run,
   metricKey,
+  finishMode = "exact",
 }: {
   run: SimulationRun
   metricKey: string
+  finishMode?: "exact" | "orBetter"
 }) {
   const metric = SIM_METRICS.find((m) => m.key === metricKey)!
+  const chartLabel =
+    metric.finish && finishMode === "orBetter"
+      ? `${FINISHES.find((finish) => finish.key === metric.finish)!.full} or better`
+      : metric.label
+  const cumulativeFinishValue = (
+    record: SimulationRun["aggregates"][number],
+  ) => {
+    if (!metric.finish || finishMode === "exact")
+      return metric.value(record, run.count)
+    const start = FINISHES.findIndex((finish) => finish.key === metric.finish!)
+    const finishes = FINISHES.slice(start).reduce(
+      (total, finish) => total + record.finishes[finish.key],
+      0,
+    )
+    return (finishes / run.count) * 100
+  }
   const points = [...run.aggregates]
     .sort((a, b) => a.team.localeCompare(b.team))
-    .map((r) => ({ team: r.team, value: metric.value(r, run.count) }))
+    .map((r) => ({ team: r.team, value: cumulativeFinishValue(r) }))
   const signed = metric.unit === "signed"
   const rawMin = Math.min(0, ...points.map((p) => p.value))
   const rawMax = Math.max(0, ...points.map((p) => p.value))
@@ -204,9 +268,9 @@ export function TeamBars({
         viewBox={`0 0 ${width} ${height}`}
         className="min-w-[850px] w-full"
         role="img"
-        aria-label={`${metric.label} by team`}
+        aria-label={`${chartLabel} by team`}
       >
-        <title>{`${metric.label} by team`}</title>
+        <title>{`${chartLabel} by team`}</title>
         {ticks.map((t, i) => (
           <g key={i}>
             <line

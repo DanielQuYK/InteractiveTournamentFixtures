@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 import { ALL_KO_TEAMS } from "../lib/data"
 import {
+  MATCH_ORDER,
+  bracketParticipants,
+  type BracketTally,
   emptyAggregate,
   FINISHES,
   FINISH_SLOTS,
@@ -74,5 +77,30 @@ describe("simulation reporting", () => {
     expect(
       [...totals.values()].reduce((sum, r) => sum + r.matches - r.wins, 0),
     ).toBe(count * 14)
+  })
+})
+
+describe("most common bracket data", () => {
+  it("counts every run exactly once, with winners consistent with participants", () => {
+    const totals = new Map(
+      [...ALL_KO_TEAMS].map((team) => [team, emptyAggregate(team)]),
+    )
+    const brackets: BracketTally = new Map()
+    const strengths = simulationStrengths()
+    for (let i = 0; i < 300; i++) runOneSimulation(strengths, totals, brackets)
+    const records = [...brackets.values()]
+    expect(records.reduce((sum, r) => sum + r.count, 0)).toBe(300)
+    for (const record of records) {
+      const winners = record.key.split("|")
+      expect(winners).toHaveLength(MATCH_ORDER.length)
+      const teams = bracketParticipants(winners)
+      winners.forEach((winner, i) => expect(teams[i]).toContain(winner))
+      expect(record.marginSum.every((m) => m >= 0)).toBe(true)
+    }
+    expect(
+      bracketParticipants(records[0].key.split("|"))[
+        MATCH_ORDER.indexOf("Q1")
+      ][0],
+    ).toBe("SKHLMC")
   })
 })

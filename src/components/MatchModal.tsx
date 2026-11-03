@@ -2,7 +2,6 @@ import { type ReactNode } from 'react'
 import { useDialog } from '../lib/hooks'
 import { KO_MATCHES, ROUND_NAME, VENUES, VENUE_SHORT, fmtDate, koById, slotTeam, type Slot } from '../lib/data'
 import { type Detail, TeamBtn, describeSource, remarkText } from './shared'
-import { Knockout } from './Knockout'
 import { groupSeed } from '../lib/stats'
 
 /* ---------- Match detail modal ---------- */

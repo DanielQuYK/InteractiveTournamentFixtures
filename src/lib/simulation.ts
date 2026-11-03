@@ -1,4 +1,11 @@
-import { GROUP_MATCHES, KO_MATCHES, koById, koWinner, slotTeam } from "./data"
+import {
+  GROUP_MATCHES,
+  KO_MATCHES,
+  koById,
+  koWinner,
+  slotTeam,
+  type Slot,
+} from "./data"
 
 /* ---------- Monte Carlo knockout simulation ---------- */
 
@@ -25,11 +32,80 @@ export const emptyAggregate = (team: string): SimAggregate => ({
   finishes: { r14: 0, qf: 0, fourth: 0, third: 0, runnerUp: 0, champion: 0 },
 })
 
+/** Matches in the order they are played inside one simulation. */
+export const MATCH_ORDER = [
+  "R1",
+  "R2",
+  "R3",
+  "R4",
+  "R5",
+  "R6",
+  "Q1",
+  "Q2",
+  "Q3",
+  "Q4",
+  "S1",
+  "S2",
+  "TP",
+  "F",
+] as const
+
+/** How often one exact set of 14 match winners occurred, plus summed winning margins per match. */
+export interface BracketRecord {
+  key: string
+  count: number
+  marginSum: number[]
+}
+
+export type BracketTally = Map<string, BracketRecord>
+
+/** Smallest run for which the most-common-bracket view is offered. */
+export const MIN_BRACKET_RUNS = 1000
+
+/** The two teams in each match (in MATCH_ORDER) for a given list of winners. */
+export function bracketParticipants(winners: string[]): [string, string][] {
+  const result: [string, string][] = []
+  const resolve = (slot: Slot): string => {
+    if (slot.kind === "team") return slot.team
+    const index = MATCH_ORDER.indexOf(slot.of as typeof MATCH_ORDER[number])
+    const winner = winners[index]
+    if (slot.kind === "winner") return winner
+    const [a, b] = result[index]
+    return winner === a ? b : a
+  }
+  for (const id of MATCH_ORDER) {
+    const match = koById(id)
+    result.push([resolve(match.home), resolve(match.away)])
+  }
+  return result
+}
+
+/** Scorelines for one pairing at one stage. Goals are listed for `teams[0]` first (alphabetical). */
+export interface StageScores {
+  count: number
+  scores: Record<string, number>
+  /** Wins for teams[0] and teams[1]; level scores are settled by shoot-out. */
+  wins: [number, number]
+}
+
+export interface MatchupRecord {
+  key: string
+  teams: [string, string]
+  /** Keyed by match id (e.g. "F", "TP"), because one pairing can meet at different stages. */
+  stages: Record<string, StageScores>
+}
+
+export type MatchupTally = Map<string, MatchupRecord>
+
 export interface SimulationRun {
   id: number
   createdAt: Date
   count: number
   aggregates: SimAggregate[]
+  /** Distinct winner-only brackets seen in the run (at most a few thousand rows). */
+  brackets: BracketRecord[]
+  /** Scoreline counts for every pairing that occurred, by stage (compact: at most a few hundred rows). */
+  matchups: MatchupRecord[]
 }
 
 export interface SimMatchResult {
@@ -231,6 +307,8 @@ export function simulateMatch(
 export function runOneSimulation(
   strengths: ReturnType<typeof simulationStrengths>,
   aggregate: Map<string, SimAggregate>,
+  brackets?: BracketTally,
+  matchups?: MatchupTally,
 ) {
   const finish = (team: string, key: FinishKey) => {
     aggregate.get(team)!.finishes[key]++
@@ -244,8 +322,16 @@ export function runOneSimulation(
     if (!tally.has(team)) tally.set(team, { played: 0, won: 0 })
     return tally.get(team)!
   }
+  const winners: string[] = []
+  const margins: number[] = []
   const play = (id: string, home: string, away: string) => {
     const result = simulateMatch(id, home, away, strengths)
+    winners.push(result.winner)
+    if (matchups) recordMatchup(matchups, id, result)
+    // Winner's goal margin; a shoot-out win after a level score counts as zero.
+    margins.push(
+      result.winner === home ? result.hg - result.ag : result.ag - result.hg,
+    )
     const h = aggregate.get(home)!,
       a = aggregate.get(away)!
     count(home).played++
@@ -294,6 +380,24 @@ export function runOneSimulation(
 
   for (const [team, t] of tally)
     aggregate.get(team)!.winRateSum += t.won / t.played
+
+  if (brackets) {
+    const key = winners.join("|")
+    let record = brackets.get(key)
+    if (!record) {
+      record = {
+        key,
+        count: 0,
+        marginSum: new Array(MATCH_ORDER.length).fill(0),
+      }
+      brackets.set(key, record)
+    }
+    record.count++
+    const target = record
+    margins.forEach((margin, index) => {
+      target.marginSum[index] += margin
+    })
+  }
 }
 
 /* ---------- Reported measures ---------- */
@@ -404,4 +508,21 @@ export function probabilityInterval(hits: number, runs: number) {
   const centre = ((hits / runs + z2 / (2 * runs)) / (1 + z2 / runs)) * 100
   const half = marginOfError(hits, runs)
   return { low: Math.max(0, centre - half), high: Math.min(100, centre + half) }
+}
+
+function recordMatchup(tally: MatchupTally, id: string, result: SimMatchResult) {
+  const teams = [result.home, result.away].sort() as [string, string]
+  const key = teams.join("|")
+  let record = tally.get(key)
+  if (!record) {
+    record = { key, teams, stages: {} }
+    tally.set(key, record)
+  }
+  const stage = (record.stages[id] ??= { count: 0, scores: {}, wins: [0, 0] })
+  const first = result.home === teams[0] ? result.hg : result.ag
+  const second = result.home === teams[0] ? result.ag : result.hg
+  const score = `${first}-${second}`
+  stage.count++
+  stage.scores[score] = (stage.scores[score] ?? 0) + 1
+  stage.wins[result.winner === teams[0] ? 0 : 1]++
 }

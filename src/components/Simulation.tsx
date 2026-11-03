@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react"
 import { ALL_KO_TEAMS } from "../lib/data"
 import { SimulationCharts } from "./SimulationCharts"
+import { CommonBracket } from "./CommonBracket"
 import { EmptyComparison } from "./shared"
 import { groupSeed } from "../lib/stats"
 import {
@@ -9,11 +10,16 @@ import {
   emptyAggregate,
   formatMetric,
   probabilityInterval,
+  type BracketTally,
+  type MatchupTally,
   type SimAggregate,
   type SimulationRun,
   runOneSimulation,
   simulationStrengths,
 } from "../lib/simulation"
+
+/** Upper limit per run. Only compact aggregates are kept, so this affects time, not storage. */
+const MAX_SIMULATIONS = 1_000_000
 
 export function Simulation() {
   const [count, setCount] = useState(1000)
@@ -27,7 +33,7 @@ export function Simulation() {
   const active = runs.find((run) => run.id === activeId) ?? runs[0]
 
   const start = async () => {
-    const simulations = Math.max(1, Math.min(100000, Math.round(count || 1)))
+    const simulations = Math.max(1, Math.min(MAX_SIMULATIONS, Math.round(count || 1)))
     setCount(simulations)
     setRunning(true)
     setProgress(0)
@@ -36,13 +42,16 @@ export function Simulation() {
     const aggregate = new Map<string, SimAggregate>(
       teams.map((team) => [team, emptyAggregate(team)]),
     )
+    const brackets: BracketTally = new Map()
+    const matchups: MatchupTally = new Map()
     const strengths = simulationStrengths()
     // Use approximately 100 equal visual steps regardless of run size. A fixed
     // batch made small runs jump abruptly and large runs appear out of sync.
     const batchSize = Math.max(1, Math.ceil(simulations / 100))
     for (let i = 0; i < simulations; i += batchSize) {
       const end = Math.min(simulations, i + batchSize)
-      for (let j = i; j < end; j++) runOneSimulation(strengths, aggregate)
+      for (let j = i; j < end; j++)
+        runOneSimulation(strengths, aggregate, brackets, matchups)
       setProgress(end / simulations)
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
       if (cancelled.current) {
@@ -55,6 +64,8 @@ export function Simulation() {
       createdAt: new Date(),
       count: simulations,
       aggregates: [...aggregate.values()],
+      brackets: [...brackets.values()],
+      matchups: [...matchups.values()],
     }
     setRuns((current) => [run, ...current].slice(0, 12))
     setActiveId(run.id)
@@ -131,8 +142,8 @@ export function Simulation() {
             <input
               type="number"
               min={1}
-              max={100000}
-              step={100}
+              max={MAX_SIMULATIONS}
+              step={1000}
               value={count}
               disabled={running}
               onChange={(e) => setCount(Number(e.target.value))}
@@ -140,7 +151,7 @@ export function Simulation() {
             />
           </label>
           <div className="flex flex-wrap gap-2">
-            {[100, 1000, 10000, 50000].map((n) => (
+            {[100, 1000, 10000, 100000, 1000000].map((n) => (
               <button
                 key={n}
                 disabled={running}
@@ -195,9 +206,11 @@ export function Simulation() {
         )}
         <p className="mt-4 text-xs text-stone-500">
           Storage remains compact: a run saves only aggregate wins, goals,
-          matches and finishing counts for 14 teams—not individual simulated
-          fixtures. Up to 12 run summaries are retained for this browser
-          session.
+          matches and finishing counts for 14 teams, plus compact counts of
+          distinct brackets and scorelines—not individual simulated fixtures.
+          Up to 12 run summaries are retained for this browser session. Runs
+          of up to 1,000,000 simulations are allowed; a million typically takes
+          around 15–30 seconds, depending on your device.
         </p>
       </section>
 
@@ -208,21 +221,37 @@ export function Simulation() {
           <div className="mb-5 flex flex-wrap items-center gap-3">
             <label className="text-sm text-stone-600">
               Run
-              <select
-                value={active.id}
-                onChange={(e) => setActiveId(Number(e.target.value))}
-                className="glass-control ml-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-700"
-              >
-                {runs.map((run) => (
-                  <option key={run.id} value={run.id}>
-                    {run.count.toLocaleString()} simulations ·{" "}
-                    {run.createdAt.toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </option>
-                ))}
-              </select>
+              <span className="relative ml-2 inline-flex">
+                <select
+                  value={active.id}
+                  onChange={(e) => setActiveId(Number(e.target.value))}
+                  className="glass-control appearance-none rounded-lg border border-stone-300 bg-white py-2.5 pl-3 pr-10 text-sm outline-none focus:border-emerald-700"
+                >
+                  {runs.map((run) => (
+                    <option key={run.id} value={run.id}>
+                      {run.count.toLocaleString()} simulations ·{" "}
+                      {run.createdAt.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </option>
+                  ))}
+                </select>
+                <svg
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-stone-600"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="m3 5 4 4 4-4" />
+                </svg>
+              </span>
             </label>
             <button
               onClick={exportCsv}
@@ -310,6 +339,36 @@ export function Simulation() {
                 className="glass-control ml-auto w-40 rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-sm outline-none focus:border-emerald-700"
               />
             </div>
+            <div className="border-b border-stone-200 bg-stone-50 px-4 py-3 text-xs leading-relaxed text-stone-600">
+              <p>
+                <strong className="text-stone-800">
+                  How to read these percentages:
+                </strong>{" "}
+                20.0% (200) means the team finished in that position in 200 of
+                1,000 simulations. Each team receives exactly one finishing
+                position per simulation, so its six finishing percentages add up
+                to approximately 100% after rounding.
+              </p>
+              <p className="mt-2">
+                <strong className="text-stone-800">
+                  95% CI means 95% confidence interval.
+                </strong>{" "}
+                A range such as 17.6–22.6% reflects uncertainty in the model’s
+                finishing probability due to the finite number of simulations.
+                If we repeatedly ran the same number of independent simulations
+                with the same model and calculated intervals this way, about 95%
+                of those intervals would contain the model’s underlying
+                probability for that team and position. It is not a range of
+                possible finishing places, nor does it mean the team has a 95%
+                chance of achieving that finish.
+              </p>
+              <p className="mt-2">
+                More simulations usually narrow the interval. These ranges cover
+                simulation sampling error only—not uncertain team ratings,
+                missing data or whether the model accurately predicts the real
+                tournament.
+              </p>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1500px] text-sm">
                 <thead className="bg-stone-100 text-xs uppercase tracking-wide text-stone-600">
@@ -387,6 +446,7 @@ export function Simulation() {
             played.
           </p>
           <SimulationCharts run={active} />
+          <CommonBracket run={active} />
           <details className="glass-surface mt-5 rounded-xl border border-stone-200 bg-white p-4 text-sm">
             <summary className="cursor-pointer font-semibold">
               Model and data notes

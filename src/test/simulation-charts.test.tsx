@@ -11,6 +11,8 @@ const run: SimulationRun = {
   id: 1,
   createdAt: new Date(),
   count: 10,
+  brackets: [],
+  matchups: [],
   aggregates: [
     { ...emptyAggregate("HKUGA"), gf: 10, ga: 30 },
     { ...emptyAggregate("CANADIAN"), gf: 30, ga: 10 },
@@ -32,6 +34,22 @@ describe("simulation chart rendering", () => {
     expect(html).toContain("#be123c")
     expect(html).toContain("#047857")
     expect(html).not.toContain("NaN")
+  })
+
+  it("distinguishes an exact exit from that position or better", () => {
+    const canadian = emptyAggregate("CANADIAN")
+    canadian.finishes.champion = 10
+    const finishRun = { ...run, aggregates: [canadian] }
+    const exact = renderToStaticMarkup(
+      <TeamBars run={finishRun} metricKey="r14" finishMode="exact" />,
+    )
+    const cumulative = renderToStaticMarkup(
+      <TeamBars run={finishRun} metricKey="r14" finishMode="orBetter" />,
+    )
+    expect(exact).toContain("CANADIAN")
+    expect(exact).toContain("0.0%")
+    expect(cumulative).toContain("Round of 14 or better")
+    expect(cumulative).toContain("100.0%")
   })
 
   it("handles a 100% pie slice and keeps zero categories labelled", () => {

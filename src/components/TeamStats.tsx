@@ -2,7 +2,6 @@ import { useMediaQuery, usePersistentState } from '../lib/hooks'
 import { useMemo, useState, type ReactNode } from 'react'
 import { ALL_KO_TEAMS } from '../lib/data'
 import { EmptyComparison, TeamBtn } from './shared'
-import { Knockout, layout } from './Knockout'
 import { METRICS, type Metric, type TeamRec, groupInfo, groupSeed, teamRecords } from '../lib/stats'
 
 export function TeamStats({ onTeam }: { onTeam: (t: string) => void }) {
