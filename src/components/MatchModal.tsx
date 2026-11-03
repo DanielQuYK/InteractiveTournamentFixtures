@@ -1,4 +1,5 @@
-import { useEffect, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
+import { useDialog } from '../lib/hooks'
 import { KO_MATCHES, ROUND_NAME, VENUES, VENUE_SHORT, fmtDate, koById, slotTeam, type Slot } from '../lib/data'
 import { type Detail, TeamBtn, describeSource, remarkText } from './shared'
 import { Knockout } from './Knockout'
@@ -7,11 +8,7 @@ import { groupSeed } from '../lib/stats'
 /* ---------- Match detail modal ---------- */
 
 export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClose: () => void; onTeam: (t: string) => void }) {
-  useEffect(() => {
-    const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', k)
-    return () => document.removeEventListener('keydown', k)
-  }, [onClose])
+  const dialogRef = useDialog<HTMLDivElement>(onClose)
 
   let title = '', subtitle = '', date = '', time = '', venue = '', status = ''
   let home: string | null = null, away: string | null = null
@@ -113,7 +110,7 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-900/30 p-4 backdrop-blur-[2px]" onClick={onClose}>
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-white/60 bg-white/90 shadow-2xl backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Match details" className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-white/60 bg-white/90 shadow-2xl backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} aria-label="Close" className="liquid absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-stone-600">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M2 2l10 10M12 2L2 12" /></svg>
         </button>

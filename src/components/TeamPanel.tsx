@@ -1,9 +1,11 @@
+import { useDialog } from '../lib/hooks'
 import { type ReactNode } from 'react'
 import { GROUP_MATCHES, KO_MATCHES, ROUND_NAME, VENUES, VENUE_SHORT, WITHDRAWN, fmtDate, koById, koWinner, slotTeam, standings, timeMinutes, type GroupMatch, type KoMatch, type Slot } from '../lib/data'
 import { TeamBtn, describeSource, remarkText } from './shared'
 import { groupSeed } from '../lib/stats'
 
 export function TeamPanel({ team, onClose, onTeam }: { team: string; onClose: () => void; onTeam: (t: string) => void }) {
+  const panelRef = useDialog<HTMLElement>(onClose)
   const group = GROUP_MATCHES.find((m) => m.home === team || m.away === team)?.group
   const gm = GROUP_MATCHES.filter((m) => m.home === team || m.away === team).sort(
     (a, b) => a.date.localeCompare(b.date) || timeMinutes(a.time) - timeMinutes(b.time),
@@ -48,7 +50,7 @@ export function TeamPanel({ team, onClose, onTeam }: { team: string; onClose: ()
 
   return (
     <div className="fixed inset-0 z-30 flex justify-end bg-stone-900/40" onClick={onClose}>
-      <aside className="isolate h-full w-full max-w-xl overflow-y-auto bg-stone-50 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <aside ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${team} fixtures`} className="isolate h-full outline-none w-full max-w-xl overflow-y-auto bg-stone-50 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 z-30 flex items-start justify-between border-b border-emerald-900 bg-emerald-950 px-6 py-5 text-white shadow-sm">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Team fixtures</p>
@@ -189,7 +191,7 @@ export function GroupLine({ m, team, onTeam }: { m: GroupMatch; team: string; on
     const f = home ? m.hs : m.as, c = home ? m.as : m.hs
     result = f > c ? 'W' : f < c ? 'L' : 'D'
   }
-  const color = result === 'W' ? 'bg-emerald-100 text-emerald-800' : result === 'L' ? 'bg-rose-100 text-rose-800' : result === 'D' ? 'bg-stone-200 text-stone-700' : 'bg-stone-100 text-stone-500'
+  const color = result === 'W' ? 'bg-emerald-100 text-emerald-800' : result === 'L' ? 'bg-rose-100 text-rose-800' : result === 'D' ? 'bg-stone-200 text-stone-700' : 'bg-stone-100 text-stone-600'
   return (
     <li className="liquid flex items-start gap-3 p-3 text-sm">
       <span className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-xs font-bold ${color}`}>{result || '–'}</span>

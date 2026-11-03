@@ -46,3 +46,16 @@ export function EmptyComparison({ text }: { text: string }) {
   )
 }
 
+
+/** Shown only when data checks find a problem, so inconsistencies are never silent. */
+export function DataNotice({ issues, title }: { issues: string[]; title: string }) {
+  if (!issues.length) return null
+  return (
+    <div role="alert" className="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+      <p className="font-semibold">{title}: {issues.length} {issues.length === 1 ? 'issue' : 'issues'} found</p>
+      <ul className="mt-1.5 list-disc space-y-1 pl-5">
+        {issues.map((i) => <li key={i}>{i}</li>)}
+      </ul>
+    </div>
+  )
+}

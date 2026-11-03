@@ -1,6 +1,11 @@
 @import 'tailwindcss';
 
 @layer base {
+  :focus-visible {
+    outline: 2px solid #059669;
+    outline-offset: 2px;
+  }
+
   html {
     background: #022c22;
     overscroll-behavior-y: none;
@@ -12,13 +17,27 @@
   }
 }
 
-/* Liquid-glass hover: a pointer-following sheen that sits BEHIND content so text stays crisp */
+/* ------------------------------------------------------------------
+   Liquid glass design tokens — every hover, glass panel and control below
+   draws from these so the effect is one consistent system.
+   ------------------------------------------------------------------ */
+:root {
+  --glass-accent: 16, 185, 129;          /* emerald-500 */
+  --glass-accent-strong: 6, 78, 59;      /* emerald-900 */
+  --glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.5), transparent 50%);
+  --glass-highlight: radial-gradient(var(--glass-radius, 120px) circle at var(--mx) var(--my), rgba(var(--glass-accent), 0.2), rgba(var(--glass-accent), 0.06) 55%, transparent 78%);
+  --glass-rim: inset 0 0 0 1px rgba(255, 255, 255, 0.8), inset 0 1px 6px rgba(255, 255, 255, 0.9);
+  --glass-lift: 0 10px 24px -10px rgba(var(--glass-accent-strong), 0.35);
+  --glass-ease: cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+
+/* Interactive: pointer-following sheen that sits BEHIND content so text stays crisp */
 .liquid:not(.absolute) { position: relative; }
 .liquid {
   isolation: isolate;
   --mx: 50%;
   --my: 50%;
-  transition: transform 0.45s cubic-bezier(0.22, 1.2, 0.36, 1), box-shadow 0.35s ease, background-color 0.3s ease;
+  transition: transform 0.45s var(--glass-ease), box-shadow 0.35s ease, background-color 0.3s ease;
 }
 .liquid::after {
   content: '';
@@ -28,59 +47,57 @@
   border-radius: inherit;
   pointer-events: none;
   opacity: 0;
-  background:
-    radial-gradient(120px circle at var(--mx) var(--my), rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.06) 55%, transparent 75%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.5), transparent 50%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8), inset 0 1px 6px rgba(255, 255, 255, 0.9);
+  background: var(--glass-highlight), var(--glass-sheen);
+  box-shadow: var(--glass-rim);
   transition: opacity 0.3s ease;
 }
-.liquid:hover::after { opacity: 1; }
+.liquid:hover::after, .liquid:focus-visible::after { opacity: 1; }
 .liquid:active { transform: scale(0.985); }
-div.liquid:hover, li.liquid:hover { transform: translateY(-2px) scale(1.012); box-shadow: 0 10px 24px -10px rgba(6, 78, 59, 0.35); z-index: 5; }
+div.liquid:hover, li.liquid:hover { transform: translateY(-2px) scale(1.012); box-shadow: var(--glass-lift); z-index: 5; }
 button.liquid:hover { transform: translateY(-1px) scale(1.04); }
-.main-tab {
-  flex: 0 0 auto;
-  transform-origin: bottom center;
-}
-/* table rows: pointer-following glass painted as the row background */
+
+/* Table rows: the same glass painted as the row background */
 tr.liquid::after { display: none; }
-tr.liquid:hover {
-  background-image:
-    radial-gradient(160px circle at var(--mx) var(--my), rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.07) 55%, transparent 80%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.5), transparent 50%);
+tr.liquid:hover, tr.liquid:focus-visible {
+  --glass-radius: 160px;
+  background-image: var(--glass-highlight), var(--glass-sheen);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
-.liquid-dark::after {
-  background: radial-gradient(110px circle at var(--mx) var(--my), rgba(110, 231, 183, 0.28), rgba(110, 231, 183, 0.08) 55%, transparent 75%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-}
-.liquid-dark:hover { background-color: rgba(6, 78, 59, 0.6); }
 
-/* Quiet glass surfaces support the interactive liquid elements without
-   placing an animated layer over dense text or tabular data. */
+/* On dark surfaces (main navigation) */
+.liquid-dark { --glass-accent: 110, 231, 183; --glass-radius: 110px; }
+.liquid-dark::after { background: var(--glass-highlight); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18); }
+.liquid-dark:hover { background-color: rgba(6, 78, 59, 0.6); }
+.main-tab { flex: 0 0 auto; transform-origin: bottom center; }
+
+/* Passive: quiet glass panels that support the interactive elements without
+   placing an animated layer over dense text or tables */
 .glass-surface {
-  background-image:
-    radial-gradient(circle at 8% 0%, rgba(167, 243, 208, 0.13), transparent 28%),
+  background-image: radial-gradient(circle at 8% 0%, rgba(167, 243, 208, 0.13), transparent 28%),
     linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(250, 250, 249, 0.68));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 8px 28px -24px rgba(6, 78, 59, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 28px -24px rgba(var(--glass-accent-strong), 0.55);
   backdrop-filter: blur(10px) saturate(1.08);
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 .glass-surface:hover {
   border-color: rgba(5, 150, 105, 0.28);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 14px 34px -25px rgba(6, 78, 59, 0.65);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 14px 34px -25px rgba(var(--glass-accent-strong), 0.65);
 }
+
+/* Inputs: glass fill with the same glow on focus */
 .glass-control {
   background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(236, 253, 245, 0.5));
   backdrop-filter: blur(8px) saturate(1.15);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
-.glass-control:focus-within {
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12), 0 10px 24px -18px rgba(6, 78, 59, 0.55);
+.glass-control:focus-within, input.glass-control:focus, select.glass-control:focus {
+  box-shadow: 0 0 0 3px rgba(var(--glass-accent), 0.14), 0 10px 24px -18px rgba(var(--glass-accent-strong), 0.55);
 }
 @media (prefers-reduced-motion: reduce) {
-  .liquid, .liquid:hover { transform: none !important; }
+  .liquid, .liquid:hover, .liquid:active { transform: none !important; }
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

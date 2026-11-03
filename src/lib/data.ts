@@ -173,6 +173,8 @@ export function standings(group: number): Standing[] {
 
 export const GROUPS = [1, 2, 3, 4, 5, 6, 7]
 
+import { KO_RESULTS } from './results'
+
 // ---------------- Knockout ----------------
 export type Slot =
   | { kind: 'team'; team: string; seed: string }
@@ -221,6 +223,15 @@ export const KO_MATCHES: KoMatch[] = [
   { id: 'TP', label: 'Third-place play-off', round: 'TP', date: '2026-12-02', time: '3:00 PM', venue: 'AB', home: L('S1'), away: L('S2') },
   { id: 'F', label: 'Final', round: 'F', date: '2026-12-07', time: '2:15 PM', venue: 'KT', home: W('S1'), away: W('S2') },
 ]
+
+// Apply recorded results (see results.ts)
+for (const m of KO_MATCHES) {
+  const r = KO_RESULTS[m.id]
+  if (r) {
+    m.score = r.score
+    m.pens = r.pens
+  }
+}
 
 export const koById = (id: string) => KO_MATCHES.find((m) => m.id === id)!
 

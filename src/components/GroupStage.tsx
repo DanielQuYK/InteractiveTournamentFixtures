@@ -1,14 +1,19 @@
+import { usePersistentState } from '../lib/hooks'
+import { activateOnKey } from '../lib/hooks'
 import { useMemo, useState } from 'react'
 import { GROUPS, GROUP_MATCHES, PENALTIES, REMARKS, VENUE_SHORT, WITHDRAWN, fmtDate, standings, timeMinutes } from '../lib/data'
-import { type Detail, TeamBtn, remarkText } from './shared'
+import { type Detail, DataNotice, TeamBtn, remarkText } from './shared'
+import { penaltyNotes, tieNotes, validateQualifiers } from '../lib/validation'
 
 /* ---------- Group stage ---------- */
 
 export function GroupStage({ onTeam, onMatch }: { onTeam: (t: string) => void; onMatch: (d: Detail) => void }) {
-  const [sel, setSel] = useState<number | 'all'>('all')
+  const [sel, setSel] = usePersistentState<number | 'all'>('group-filter', 'all')
   const list = sel === 'all' ? GROUPS : [sel]
+  const dataIssues = useMemo(() => validateQualifiers(), [])
   return (
     <div>
+      <DataNotice issues={dataIssues} title="Qualification check" />
       <div className="mb-6 flex flex-wrap gap-2">
         {(['all', ...GROUPS] as const).map((g) => (
           <button
@@ -57,9 +62,10 @@ export function GroupBlock({ group, onTeam, onMatch }: { group: number; onTeam: 
         ))}
       </h2>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <div className="min-w-0">
         <div className="glass-surface overflow-x-auto rounded-lg border border-stone-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-stone-100 text-xs uppercase tracking-wide text-stone-500">
+          <table className="w-full min-w-[340px] text-sm">
+            <thead className="bg-stone-100 text-xs uppercase tracking-wide text-stone-600">
               <tr>
                 <th className="py-2 pl-3 text-left">#</th>
                 <th className="py-2 text-left">Team</th>
@@ -84,10 +90,16 @@ export function GroupBlock({ group, onTeam, onMatch }: { group: number; onTeam: 
             </tbody>
           </table>
         </div>
+          {(tieNotes(group).length > 0 || penaltyNotes(group).length > 0) && (
+            <ul className="mt-2 space-y-1 px-1 text-xs leading-relaxed text-stone-600">
+              {[...tieNotes(group), ...penaltyNotes(group)].map((n) => <li key={n}>{n}</li>)}
+            </ul>
+          )}
+        </div>
 
         <div className="glass-surface overflow-x-auto rounded-lg border border-stone-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-stone-100 text-xs uppercase tracking-wide text-stone-500">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead className="bg-stone-100 text-xs uppercase tracking-wide text-stone-600">
               <tr>
                 <th className="py-2 pl-3 text-left">Kick-off</th>
                 <th className="py-2 text-right">Home</th>
@@ -98,14 +110,14 @@ export function GroupBlock({ group, onTeam, onMatch }: { group: number; onTeam: 
             </thead>
             <tbody>
               {matches.map((m) => (
-                <tr key={m.game + m.date + m.home} onClick={() => onMatch({ kind: 'group', m })} className="liquid cursor-pointer border-t border-stone-100 align-top">
+                <tr key={m.game + m.date + m.home} onClick={() => onMatch({ kind: 'group', m })} {...activateOnKey(() => onMatch({ kind: 'group', m }), false)} aria-label={`${m.home} v ${m.away}, group ${m.group} game ${m.game}. Open match details`} className="liquid cursor-pointer border-t border-stone-100 align-top">
                   <td className="whitespace-nowrap py-2 pl-3 text-stone-600">
                     <div>{fmtDate(m.date)}</div>
                     <div className="text-xs text-stone-500">{m.time}</div>
                   </td>
                   <td className="py-2 text-right"><TeamBtn name={m.home} onTeam={onTeam} /></td>
                   <td className="px-2 py-2 text-center font-semibold tabular-nums">
-                    {m.hs === null ? <span className="font-normal text-stone-400">–</span> : `${m.hs} : ${m.as}`}
+                    {m.hs === null ? <span className="font-normal text-stone-500">–</span> : `${m.hs} : ${m.as}`}
                   </td>
                   <td className="py-2"><TeamBtn name={m.away} onTeam={onTeam} /></td>
                   <td className="py-2 pr-3 text-xs text-stone-500">

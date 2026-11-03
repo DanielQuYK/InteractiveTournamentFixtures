@@ -1,6 +1,9 @@
+import { usePersistentState } from '../lib/hooks'
+import { activateOnKey, usePrefersReducedMotion } from '../lib/hooks'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { KO_MATCHES, VENUES, fmtDate, koById, koWinner, slotTeam, slotText, type KoMatch, type Slot } from '../lib/data'
-import { type Detail, TeamBtn } from './shared'
+import { ALL_KO_TEAMS, KO_MATCHES, VENUES, fmtDate, koById, koWinner, slotTeam, slotText, type KoMatch, type Slot } from '../lib/data'
+import { type Detail, DataNotice, TeamBtn } from './shared'
+import { validateResults } from '../lib/validation'
 import { groupSeed } from '../lib/stats'
 
 /* ---------- Knockout bracket ---------- */
@@ -144,7 +147,7 @@ export function KnockoutTeamSearch({ onSelect }: { onSelect: (state: KnockoutTea
         Find a team in the bracket
       </label>
       <div className={`glass-control flex items-center rounded-xl border bg-white shadow-sm transition-colors ${open ? 'border-emerald-700 ring-2 ring-emerald-100' : 'border-stone-300'}`}>
-        <svg className="ml-3 shrink-0 text-stone-400" width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+        <svg className="ml-3 shrink-0 text-stone-500" width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
           <circle cx="7" cy="7" r="4.5" />
           <path d="M10.5 10.5L14 14" />
         </svg>
@@ -161,12 +164,12 @@ export function KnockoutTeamSearch({ onSelect }: { onSelect: (state: KnockoutTea
           role="combobox"
           aria-expanded={open}
           aria-controls="knockout-team-results"
-          className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm outline-none placeholder:text-stone-400"
+          className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm outline-none placeholder:text-stone-500"
         />
         {query && (
           <button
             onClick={() => { setQuery(''); setOpen(true) }}
-            className="mr-2 flex h-7 w-7 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+            className="liquid mr-2 flex h-7 w-7 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 hover:text-stone-700"
             aria-label="Clear team search"
           >
             <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -186,7 +189,7 @@ export function KnockoutTeamSearch({ onSelect }: { onSelect: (state: KnockoutTea
               onClick={() => choose(state)}
               className={`liquid mb-1 flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left last:mb-0 ${
                 state.eliminated
-                  ? 'border-stone-200 bg-stone-100 text-stone-500'
+                  ? 'border-stone-200 bg-stone-100 text-stone-600'
                   : state.champion
                     ? 'border-amber-200 bg-amber-50 text-amber-900'
                     : 'border-transparent bg-white text-stone-800 hover:border-emerald-200 hover:bg-emerald-50'
@@ -194,9 +197,9 @@ export function KnockoutTeamSearch({ onSelect }: { onSelect: (state: KnockoutTea
             >
               <span>
                 <span className="font-semibold">{state.team}</span>
-                <span className="ml-1.5 text-xs opacity-70">({groupSeed(state.team)})</span>
+                <span className="ml-1.5 text-xs opacity-90">({groupSeed(state.team)})</span>
               </span>
-              <span className="shrink-0 text-xs font-medium opacity-75">{state.status}</span>
+              <span className="shrink-0 text-xs font-medium opacity-90">{state.status}</span>
             </button>
           )) : (
             <p className="px-3 py-6 text-center text-sm text-stone-500">No team matches “{query}”.</p>
@@ -208,10 +211,11 @@ export function KnockoutTeamSearch({ onSelect }: { onSelect: (state: KnockoutTea
 }
 
 export function Knockout({ onTeam, onMatch }: { onTeam: (t: string) => void; onMatch: (d: Detail) => void }) {
-  const [focus, setFocus] = useState<Focus>({ kind: 'all' })
-  const [lastRound, setLastRound] = useState<'R14' | 'QF' | 'SF' | 'F'>('R14')
+  const [focus, setFocus] = usePersistentState<Focus>('ko-focus', { kind: 'all' })
+  const [lastRound, setLastRound] = usePersistentState<'R14' | 'QF' | 'SF' | 'F'>('ko-last-round', 'R14')
   const [size, setSize] = useState({ w: 1000, h: 640 })
   const vp = useRef<HTMLDivElement>(null)
+  const reducedMotion = usePrefersReducedMotion()
 
   useLayoutEffect(() => {
     const el = vp.current
@@ -237,7 +241,7 @@ export function Knockout({ onTeam, onMatch }: { onTeam: (t: string) => void; onM
     if (!el) return
     const left = (rect.x + rect.w / 2) * scale - size.w / 2
     const top = rect.h * scale > size.h ? rect.y * scale : (rect.y + rect.h / 2) * scale - size.h / 2
-    el.scrollTo({ left: Math.max(0, left), top: Math.max(0, top), behavior: 'smooth' })
+    el.scrollTo({ left: Math.max(0, left), top: Math.max(0, top), behavior: reducedMotion ? 'auto' : 'smooth' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus, scale, size.w, size.h])
 
@@ -295,8 +299,10 @@ export function Knockout({ onTeam, onMatch }: { onTeam: (t: string) => void; onM
   const canIn = focus.kind !== 'match'
   const canOut = focus.kind !== 'all'
 
+  const resultIssues = useMemo(() => validateResults(), [])
   return (
     <div>
+      <DataNotice issues={resultIssues} title="Results check" />
       <div className="mb-5 max-w-3xl text-sm text-stone-600">
         <p>
           Fourteen teams contest a single-elimination final round. Two group winners, SKHLMC and CANADIAN,
@@ -309,10 +315,10 @@ export function Knockout({ onTeam, onMatch }: { onTeam: (t: string) => void; onM
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex overflow-hidden rounded-lg border border-stone-300 bg-white">
-          <button onClick={zoomOut} disabled={!canOut} aria-label="Zoom out" title="Zoom out: widen the context" className="liquid flex h-9 w-10 items-center justify-center text-stone-700 disabled:opacity-35">
+          <button onClick={zoomOut} disabled={!canOut} aria-label="Zoom out" title="Zoom out: widen the context" className="liquid flex h-11 w-11 items-center sm:h-9 sm:w-10 justify-center text-stone-700 disabled:opacity-35">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="7" cy="7" r="4.5" /><path d="M5 7h4M10.5 10.5L14 14" /></svg>
           </button>
-          <button onClick={zoomIn} disabled={!canIn} aria-label="Zoom in" title="Zoom in: focus on a phase, then a match" className="liquid flex h-9 w-10 items-center justify-center border-l border-stone-300 text-stone-700 disabled:opacity-35">
+          <button onClick={zoomIn} disabled={!canIn} aria-label="Zoom in" title="Zoom in: focus on a phase, then a match" className="liquid flex h-11 w-11 items-center sm:h-9 sm:w-10 justify-center border-l border-stone-300 text-stone-700 disabled:opacity-35">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="7" cy="7" r="4.5" /><path d="M5 7h4M7 5v4M10.5 10.5L14 14" /></svg>
           </button>
         </div>
@@ -337,10 +343,10 @@ export function Knockout({ onTeam, onMatch }: { onTeam: (t: string) => void; onM
         className="relative overflow-auto rounded-xl border border-stone-200 bg-white"
         style={{ height: focus.kind === 'all' ? TOTAL_H * scale : 'min(72vh, 700px)' }}
       >
-        <div style={{ width: TOTAL_W * scale, height: TOTAL_H * scale, transition: 'width .5s, height .5s' }}>
+        <div style={{ width: TOTAL_W * scale, height: TOTAL_H * scale, transition: reducedMotion ? 'none' : 'width .5s, height .5s' }}>
           <div
             className="relative origin-top-left"
-            style={{ width: TOTAL_W, height: TOTAL_H, transform: `scale(${scale})`, transition: 'transform .6s cubic-bezier(.22,.8,.3,1)' }}
+            style={{ width: TOTAL_W, height: TOTAL_H, transform: `scale(${scale})`, transition: reducedMotion ? 'none' : 'transform .6s cubic-bezier(.22,.8,.3,1)' }}
           >
             {PHASES.map((p, c) => (
               <div key={p.round} className="absolute text-xs font-semibold uppercase tracking-widest text-stone-500" style={{ left: colX(c), top: 14 }}>
@@ -403,7 +409,7 @@ export function SlotRow({ s, m, onTeam }: { s: Slot; m: KoMatch; onTeam: (t: str
       {t ? (
         <TeamBtn name={t} onTeam={onTeam} className={`text-sm ${won ? 'text-emerald-800' : ''}`} />
       ) : (
-        <span className="truncate text-sm italic text-stone-400">{slotText(s)}</span>
+        <span className="truncate text-sm italic text-stone-500">{slotText(s)}</span>
       )}
       <span className="text-sm font-semibold tabular-nums">
         {score ?? ''}
@@ -418,6 +424,8 @@ export function MatchCard({ m, onTeam, onMatch, onZoom }: { m: KoMatch; onTeam: 
   return (
     <div
       onClick={() => onMatch({ kind: 'ko', id: m.id })}
+      {...activateOnKey(() => onMatch({ kind: 'ko', id: m.id }))}
+      aria-label={`${TAG[m.id]}: open match details`}
       className={`liquid absolute cursor-pointer overflow-hidden rounded-lg border bg-white shadow-sm ${m.round === 'F' ? 'border-amber-400' : m.round === 'TP' ? 'border-dashed border-stone-400' : 'border-stone-300'}`}
       style={{ left: p.x, top: p.y - CARD_H / 2, width: CARD_W, height: CARD_H }}
     >

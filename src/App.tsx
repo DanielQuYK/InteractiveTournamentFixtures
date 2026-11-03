@@ -1,3 +1,4 @@
+import { usePersistentState } from './lib/hooks'
 import { useEffect, useState } from 'react'
 import { type Detail, type Tab } from './components/shared'
 import { GroupStage } from './components/GroupStage'
@@ -8,7 +9,7 @@ import { TeamStats } from './components/TeamStats'
 import { Simulation } from './components/Simulation'
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('group')
+  const [tab, setTab] = usePersistentState<Tab>('tab', 'group')
   const [team, setTeam] = useState<string | null>(null)
   const [detail, setDetail] = useState<Detail | null>(null)
 
@@ -28,7 +29,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 antialiased">
       <header className="bg-emerald-950 text-white">
-        <div className="mx-auto max-w-6xl px-5 pt-8 pb-0">
+        <div className="mx-auto max-w-6xl px-3 pt-8 pb-0 sm:px-5">
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-300">Inter-School Football Competition 2026–2027</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Division Three (HK) · Boys A Grade</h1>
           <p className="mt-1 text-sm text-emerald-200/80">Group stage results and final round (single knock-out)</p>
@@ -50,7 +51,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-5 py-8">
+      <main className="mx-auto max-w-6xl px-3 py-6 sm:px-5 sm:py-8">
         {tab === 'group' ? (
           <GroupStage onTeam={setTeam} onMatch={setDetail} />
         ) : tab === 'knockout' ? (

@@ -1,3 +1,4 @@
+import { useMediaQuery, usePersistentState } from '../lib/hooks'
 import { useMemo, useState, type ReactNode } from 'react'
 import { ALL_KO_TEAMS } from '../lib/data'
 import { EmptyComparison, TeamBtn } from './shared'
@@ -6,14 +7,14 @@ import { METRICS, type Metric, type TeamRec, groupInfo, groupSeed, teamRecords }
 
 export function TeamStats({ onTeam }: { onTeam: (t: string) => void }) {
   const recs = useMemo(() => teamRecords().filter((r) => r.gp > 0), [])
-  const [view, setView] = useState<'ranking' | 'metrics' | 'teams'>('ranking')
-  const [activeMetric, setActiveMetric] = useState('win')
-  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['win', 'ppg'])
-  const [selectedTeams, setSelectedTeams] = useState<string[]>([])
-  const [koOnly, setKoOnly] = useState(false)
-  const [teamOrder, setTeamOrder] = useState<'alphabetical' | 'group'>('alphabetical')
-  const [descending, setDescending] = useState(false)
-  const [knockoutFirst, setKnockoutFirst] = useState(false)
+  const [view, setView] = usePersistentState<'ranking' | 'metrics' | 'teams'>('stats-view', 'ranking')
+  const [activeMetric, setActiveMetric] = usePersistentState('stats-metric', 'win')
+  const [selectedMetrics, setSelectedMetrics] = usePersistentState<string[]>('stats-metrics', ['win', 'ppg'])
+  const [selectedTeams, setSelectedTeams] = usePersistentState<string[]>('stats-teams', [])
+  const [koOnly, setKoOnly] = usePersistentState('stats-ko-only', false)
+  const [teamOrder, setTeamOrder] = usePersistentState<'alphabetical' | 'group'>('stats-order', 'alphabetical')
+  const [descending, setDescending] = usePersistentState('stats-desc', false)
+  const [knockoutFirst, setKnockoutFirst] = usePersistentState('stats-ko-first', false)
   const active = METRICS.find((m) => m.key === activeMetric)!
   const comparisonMetrics = METRICS.filter((m) => selectedMetrics.includes(m.key))
   const compareTeams = (a: TeamRec, b: TeamRec) => {
@@ -109,7 +110,7 @@ export function TeamStats({ onTeam }: { onTeam: (t: string) => void }) {
                 <p className="text-xs text-stone-500">Select any number. The comparison layout adapts automatically.</p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <label className="flex items-center gap-1.5 rounded-full border border-stone-300 bg-stone-50 px-3 py-1.5 text-xs text-stone-700">
+                <label className="liquid flex items-center gap-1.5 rounded-full border border-stone-300 bg-stone-50 px-3 py-1.5 text-xs text-stone-700">
                   <input
                     type="checkbox"
                     checked={knockoutFirst}
@@ -122,7 +123,7 @@ export function TeamStats({ onTeam }: { onTeam: (t: string) => void }) {
                   value={teamOrder}
                   onChange={(e) => setTeamOrder(e.target.value as 'alphabetical' | 'group')}
                   aria-label="Arrange teams by"
-                  className="rounded-full border border-stone-300 bg-stone-50 px-3 py-1.5 text-xs text-stone-700 outline-none focus:border-emerald-700"
+                  className="glass-control rounded-full border border-stone-300 bg-stone-50 px-3 py-1.5 text-xs text-stone-700 outline-none focus:border-emerald-700"
                 >
                   <option value="alphabetical">Alphabetical</option>
                   <option value="group">Group and position</option>
@@ -138,7 +139,7 @@ export function TeamStats({ onTeam }: { onTeam: (t: string) => void }) {
                   </svg>
                 </button>
                 {selectedTeams.length > 0 && (
-                  <button onClick={() => setSelectedTeams([])} className="px-1 text-xs font-medium text-emerald-800 hover:underline">Clear selection</button>
+                  <button onClick={() => setSelectedTeams([])} className="liquid rounded px-2 py-1 text-xs font-medium text-emerald-800 hover:underline">Clear selection</button>
                 )}
               </div>
             </div>
@@ -154,7 +155,7 @@ export function TeamStats({ onTeam }: { onTeam: (t: string) => void }) {
                       selected ? 'border-emerald-800 bg-emerald-800 text-white' : 'border-stone-300 bg-stone-50 text-stone-700'
                     }`}
                   >
-                    {r.team} <span className="font-normal opacity-75">({groupSeed(r.team)})</span>
+                    {r.team} <span className="font-normal opacity-90">({groupSeed(r.team)})</span>
                   </button>
                 )
               })}
@@ -187,9 +188,11 @@ export function BalancedComparison<T>({
   children: (item: T) => ReactNode
   minCardWidth?: number
 }) {
+  // On phones every card gets the full width; from tablet up, at most two balanced rows.
+  const narrow = useMediaQuery('(max-width: 767px)')
   const firstCount = items.length <= 3 ? items.length : Math.ceil(items.length / 2)
-  const rows = items.length <= 3 ? [items] : [items.slice(0, firstCount), items.slice(firstCount)]
-  const minWidth = Math.max(0, firstCount * minCardWidth + (firstCount - 1) * 20)
+  const rows = narrow ? items.map((item) => [item]) : items.length <= 3 ? [items] : [items.slice(0, firstCount), items.slice(firstCount)]
+  const minWidth = narrow ? 0 : Math.max(0, firstCount * minCardWidth + (firstCount - 1) * 20)
   return (
     <div className="overflow-x-auto pb-2">
       <div className="space-y-5" style={{ minWidth }}>
@@ -293,8 +296,8 @@ export function StatCard({
       <ol className={`${compact ? 'max-h-[24rem]' : 'max-h-[34rem]'} overflow-y-auto p-2`}>
         {rows.map(({ r, v }, i) => (
           <li key={r.team} className="liquid flex items-center gap-3 rounded-md px-2 py-1.5 text-sm">
-            <span className="w-6 text-right text-xs text-stone-400 tabular-nums">{i + 1}</span>
-            <span className="w-32 shrink-0">
+            <span className="w-6 text-right text-xs text-stone-500 tabular-nums">{i + 1}</span>
+            <span className="w-24 shrink-0 sm:w-32">
               <TeamBtn name={r.team} onTeam={onTeam} />
               <span className="ml-1 text-xs text-stone-500">({groupSeed(r.team)})</span>
             </span>
@@ -304,7 +307,7 @@ export function StatCard({
                 style={{ width: v === 0 ? 8 : `${Math.max(2, (Math.abs(v) / max) * 100)}%` }}
               />
             </span>
-            <span className="w-24 shrink-0 text-right tabular-nums">
+            <span className="w-20 shrink-0 text-right tabular-nums sm:w-24">
               <span className="font-semibold">{metric.fmt(v)}</span>
               <span className="ml-1 text-xs text-stone-500">({r.gp})</span>
             </span>
