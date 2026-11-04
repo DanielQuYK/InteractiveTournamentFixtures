@@ -1,8 +1,10 @@
 import { useDialog } from '../lib/hooks'
 import { type ReactNode } from 'react'
-import { GROUP_MATCHES, KO_MATCHES, ROUND_NAME, VENUES, VENUE_SHORT, WITHDRAWN, fmtDate, koById, koWinner, slotTeam, standings, timeMinutes, type GroupMatch, type KoMatch, type Slot } from '../lib/data'
+import { ALL_KO_TEAMS, GROUP_MATCHES, KO_MATCHES, ROUND_NAME, VENUES, VENUE_SHORT, WITHDRAWN, fmtDate, koById, koPlayed, koWinner, slotTeam, standings, timeMinutes, type GroupMatch, type KoMatch, type Slot } from '../lib/data'
 import { TeamBtn, describeSource, remarkText } from './shared'
-import { groupSeed } from '../lib/stats'
+import { groupPlaceText } from '../lib/stats'
+import { TBC_REMARK, beatLine } from '../lib/matchText'
+import { knockoutTeamState } from './Knockout'
 
 export function TeamPanel({ team, onClose, onTeam }: { team: string; onClose: () => void; onTeam: (t: string) => void }) {
   const panelRef = useDialog<HTMLElement>(onClose)
@@ -14,6 +16,7 @@ export function TeamPanel({ team, onClose, onTeam }: { team: string; onClose: ()
   const rank = table.findIndex((r) => r.team === team) + 1
 
   // knockout path
+  const koState = ALL_KO_TEAMS.has(team) ? knockoutTeamState(team) : null
   const entry = KO_MATCHES.find((m) => slotTeam(m.home) === team || slotTeam(m.away) === team)
   const path: { m: KoMatch; note: string; projected: boolean }[] = []
   let eliminated = false
@@ -23,8 +26,10 @@ export function TeamPanel({ team, onClose, onTeam }: { team: string; onClose: ()
     let status: 'confirmed' | 'projected' = 'confirmed'
     while (cur) {
       const note = !prev
-        ? entry.round === 'QF' ? 'Direct entry: first-round bye as group winner.' : 'Confirmed fixture.'
-        : cur.round === 'TP'
+        ? entry.round === 'QF' ? 'Direct entry: first-round bye as group winner.' : koWinner(cur) ? 'Played.' : 'Confirmed fixture.'
+        : koWinner(prev) === team
+          ? `Confirmed fixture: ${team} won ${prev.label}.`
+          : cur.round === 'TP'
           ? `Projected: applies only if ${team} lose ${prev.label}.`
           : `Projected: subject to ${team} winning ${prev.label}.`
       path.push({ m: cur, note, projected: status === 'projected' })
@@ -59,6 +64,7 @@ export function TeamPanel({ team, onClose, onTeam }: { team: string; onClose: ()
               {group ? `Group ${group}` : ''}
               {WITHDRAWN[team] ? ` · ${WITHDRAWN[team]}` : rank ? ` · Finished ${rank}${['st', 'nd', 'rd', 'th'][Math.min(rank, 4) - 1]}` : ''}
               {entry ? ' · Qualified for the final round' : !WITHDRAWN[team] ? ' · Did not qualify for the final round' : ''}
+              {koState ? ` · ${koState.champion ? 'Champion' : koState.eliminated ? 'Eliminated' : 'Still in the competition'}` : ''}
             </p>
           </div>
           <button
@@ -82,8 +88,8 @@ export function TeamPanel({ team, onClose, onTeam }: { team: string; onClose: ()
                   <li key={m.id} className={`liquid rounded-lg border p-4 ${projected ? 'border-dashed border-stone-300 bg-white/60' : 'border-stone-200 bg-white'}`}>
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-semibold uppercase tracking-wide text-emerald-800">{ROUND_NAME[m.round]}</span>
-                      <span className={`rounded-full px-2 py-0.5 font-medium ${projected ? 'bg-amber-100 text-amber-800' : m.score ? 'bg-stone-200 text-stone-700' : 'bg-emerald-100 text-emerald-800'}`}>
-                        {projected ? 'Projected' : m.score ? 'Completed' : 'Scheduled'}
+                      <span className={`rounded-full px-2 py-0.5 font-medium ${projected ? 'bg-amber-100 text-amber-800' : koPlayed(m) ? 'bg-stone-200 text-stone-700' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {projected ? 'Projected' : koPlayed(m) ? 'Completed' : 'Scheduled'}
                       </span>
                     </div>
                     <div className="mt-2 text-base">
@@ -134,6 +140,14 @@ export function KoLine({ m, team, onTeam }: { m: KoMatch; team: string; onTeam: 
     name === team
       ? <strong className={className}>{name}</strong>
       : <TeamBtn name={name} onTeam={onTeam} className={className} />
+  const winner = koWinner(m)
+  const tone = (name: string | null) =>
+    !name || !winner
+      ? 'border-transparent'
+      : name === winner
+        ? 'border-emerald-300 bg-emerald-100 text-emerald-950'
+        : 'border-rose-300 bg-rose-100 text-rose-950'
+  const star = m.scoreTbc ? '*' : ''
   const side = (slot: Slot, resolved: string | null, align: 'left' | 'right') => {
     const options = candidates(slot)
     const alignment = align === 'right' ? 'items-end text-right' : 'items-start text-left'
@@ -145,7 +159,7 @@ export function KoLine({ m, team, onTeam }: { m: KoMatch; team: string; onTeam: 
           {options.map((name) => (
             <li key={name}>
               <div>{teamName(name, 'text-sm')}</div>
-              <div className="text-[11px] text-stone-500">{groupSeed(name)}</div>
+              <div className="text-[11px] text-stone-500">{groupPlaceText(name)}</div>
             </li>
           ))}
         </ul>
@@ -155,17 +169,20 @@ export function KoLine({ m, team, onTeam }: { m: KoMatch; team: string; onTeam: 
       content = (
         <div className={alignment}>
           <div>{teamName(resolved)}</div>
-          <div className="text-[11px] text-stone-500">{groupSeed(resolved)}</div>
+          <div className="text-[11px] text-stone-500">{groupPlaceText(resolved)}</div>
         </div>
       )
       if (slot.kind === 'team' && slot.seed.endsWith(' – bye')) caption = ['BYE']
-      else if (slot.kind !== 'team') caption = sourceLines(slot)
+      else if (slot.kind !== 'team') {
+        const source = beatLine(koById(slot.of))
+        caption = source ? [...sourceLines(slot), source] : sourceLines(slot)
+      }
     } else {
       content = <span className={`text-sm italic text-stone-500 ${align === 'right' ? 'text-right' : 'text-left'}`}>{describeSource(slot)}</span>
     }
     return (
       <div className={`flex min-w-0 flex-col ${alignment}`}>
-        <div className="flex min-h-12 items-center">{content}</div>
+        <div className={`flex min-h-12 items-center rounded-lg border px-2.5 py-1.5 ${tone(resolved)}`}>{content}</div>
         {caption && (
           <p className="mt-2 w-full max-w-40 border-t border-stone-200 pt-1.5 text-center text-[11px] italic leading-snug text-stone-500">
             {caption.map((line) => <span key={line} className="block">{line}</span>)}
@@ -177,8 +194,12 @@ export function KoLine({ m, team, onTeam }: { m: KoMatch; team: string; onTeam: 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
       {side(m.home, h, 'left')}
-      <span className="font-semibold tabular-nums text-stone-700">{m.score ? `${m.score[0]} – ${m.score[1]}` : 'v'}</span>
+      <span className="whitespace-nowrap text-center font-semibold tabular-nums text-stone-700">
+        {m.score ? `${m.score[0]} – ${m.score[1]}${star}` : 'v'}
+        {m.pens && <span className="block text-xs font-medium">{`Pens ${m.pens[0]} – ${m.pens[1]}${star}`}</span>}
+      </span>
       {side(m.away, a, 'right')}
+      {m.scoreTbc && <p className="col-span-3 text-xs font-medium text-amber-800">{TBC_REMARK}</p>}
     </div>
   )
 }

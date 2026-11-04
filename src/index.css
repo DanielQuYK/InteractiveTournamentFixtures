@@ -101,3 +101,7 @@ tr.liquid:hover, tr.liquid:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* Anything formatted as tabular numbers (scores, percentages, counts) must never wrap
+   onto a second row, whatever container it ends up in. */
+.tabular-nums { white-space: nowrap; }

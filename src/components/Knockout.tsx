@@ -7,6 +7,7 @@ import {
   VENUES,
   fmtDate,
   koById,
+  koPlayed,
   koWinner,
   slotTeam,
   slotText,
@@ -33,8 +34,8 @@ export function knockoutTeamState(team: string): KnockoutTeamState {
   const involved = KO_MATCHES.filter(
     (m) => slotTeam(m.home) === team || slotTeam(m.away) === team,
   )
-  const completed = involved.filter((m) => Boolean(m.score))
-  const upcoming = involved.find((m) => !m.score)
+  const completed = involved.filter((m) => koPlayed(m))
+  const upcoming = involved.find((m) => !koPlayed(m))
   const last = completed.at(-1)
   const entry =
     involved[0] ??
@@ -47,7 +48,7 @@ export function knockoutTeamState(team: string): KnockoutTeamState {
   const eliminated = !upcoming && Boolean(last) && koWinner(last!) !== team
   const champion = !upcoming && last?.id === "F" && koWinner(last) === team
   const prefix = eliminated
-    ? "Last"
+    ? "Out"
     : champion
       ? "Champion"
       : upcoming && completed.length
@@ -310,25 +311,30 @@ export function SlotRow({
   const t = slotTeam(s)
   const isHome = m.home === s
   const score = m.score ? m.score[isHome ? 0 : 1] : null
-  const won = t && koWinner(m) === t
+  const winner = koWinner(m)
+  const won = Boolean(t && winner === t)
+  const lost = Boolean(t && winner && winner !== t)
+  // Played matches fill the whole row: strong green for the winner, red for the loser.
+  const tone = won
+    ? "border-l-4 border-emerald-600 bg-emerald-100 font-semibold text-emerald-950"
+    : lost
+      ? "border-l-4 border-rose-500 bg-rose-100 text-rose-900"
+      : "border-l-4 border-transparent"
+  const star = m.scoreTbc ? "*" : ""
   return (
-    <div className="flex items-center justify-between gap-2 px-3 py-1.5">
+    <div className={`flex items-center justify-between gap-2 px-3 py-1.5 ${tone}`}>
       {t ? (
-        <TeamBtn
-          name={t}
-          onTeam={onTeam}
-          className={`text-sm ${won ? "text-emerald-800" : ""}`}
-        />
+        <TeamBtn name={t} onTeam={onTeam} className="text-sm" />
       ) : (
         <span className="truncate text-sm italic text-stone-500">
           {slotText(s)}
         </span>
       )}
-      <span className="text-sm font-semibold tabular-nums">
-        {score ?? ""}
+      <span className="whitespace-nowrap text-sm font-semibold tabular-nums">
+        {score !== null && `${score}${star}`}
         {m.pens && (
-          <span className="ml-1 text-xs font-normal text-stone-500">
-            ({m.pens[isHome ? 0 : 1]})
+          <span className="ml-1 text-xs font-normal">
+            ({m.pens[isHome ? 0 : 1]}){star}
           </span>
         )}
       </span>
@@ -372,6 +378,11 @@ export function MatchCard({
           {fmtDate(m.date)} · {m.time}
         </span>
         <span className="flex items-center gap-1.5">
+          {m.scoreTbc && (
+            <span className="whitespace-nowrap font-semibold text-amber-700" title="Score to be confirmed and double-checked">
+              TBC*
+            </span>
+          )}
           <span className="font-medium">
             {m.id === "TP" ? "3rd" : m.id === "F" ? "Final" : m.id}
           </span>

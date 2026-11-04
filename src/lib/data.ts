@@ -1,17 +1,34 @@
-export const VENUES: Record<string, string> = {
+/**
+ * Joins the last three words with non-breaking spaces so a name such as
+ * "Aberdeen Sports Ground" or "... No. 4" can never leave a lone word on its own line.
+ */
+export const noOrphan = (text: string) => {
+  const words = text.split(' ')
+  if (words.length < 3) return words.join('\u00A0')
+  return [...words.slice(0, -3), words.slice(-3).join('\u00A0')].join(' ')
+}
+
+const VENUE_NAMES: Record<string, string> = {
   HV: 'Happy Valley Recreation Ground No. 4',
   AB: 'Aberdeen Sports Ground (Artificial Turf)',
   CB: 'Causeway Bay Sports Ground',
   SKP: 'So Kon Po Recreation Ground',
   KT: 'Kai Tak Youth Sports Ground',
 }
-export const VENUE_SHORT: Record<string, string> = {
+const VENUE_SHORT_NAMES: Record<string, string> = {
   HV: 'Happy Valley No. 4',
   AB: 'Aberdeen Sports Ground',
   CB: 'Causeway Bay',
   SKP: 'So Kon Po',
   KT: 'Kai Tak',
 }
+
+export const VENUES: Record<string, string> = Object.fromEntries(
+  Object.entries(VENUE_NAMES).map(([k, v]) => [k, noOrphan(v)]),
+)
+export const VENUE_SHORT: Record<string, string> = Object.fromEntries(
+  Object.entries(VENUE_SHORT_NAMES).map(([k, v]) => [k, noOrphan(v)]),
+)
 
 export const REMARKS: Record<string, string> = {
   A: 'Amended',
@@ -193,6 +210,9 @@ export interface KoMatch {
   /** Enter once played: [home, away] and optional penalty shoot-out [home, away] */
   score?: [number, number]
   pens?: [number, number]
+  /** Winner confirmed before the scoreline is (e.g. decided on penalties, scoreline to be confirmed). */
+  winnerTeam?: string
+  scoreTbc?: boolean
 }
 
 const T = (team: string, seed: string): Slot => ({ kind: 'team', team, seed })
@@ -230,20 +250,26 @@ for (const m of KO_MATCHES) {
   if (r) {
     m.score = r.score
     m.pens = r.pens
+    m.winnerTeam = r.winner
+    m.scoreTbc = r.scoreTbc
   }
 }
 
 export const koById = (id: string) => KO_MATCHES.find((m) => m.id === id)!
 
 export function koWinner(m: KoMatch): string | null {
-  if (!m.score) return null
-  const [h, a] = m.score
   const hn = slotTeam(m.home), an = slotTeam(m.away)
   if (!hn || !an) return null
+  if (m.winnerTeam) return m.winnerTeam === hn || m.winnerTeam === an ? m.winnerTeam : null
+  if (!m.score) return null
+  const [h, a] = m.score
   if (h !== a) return h > a ? hn : an
   if (m.pens) return m.pens[0] > m.pens[1] ? hn : an
   return null
 }
+/** True once a winner is known, even if the scoreline is still to be confirmed. */
+export const koPlayed = (m: KoMatch) => koWinner(m) !== null
+
 export function koLoser(m: KoMatch): string | null {
   const w = koWinner(m)
   if (!w) return null

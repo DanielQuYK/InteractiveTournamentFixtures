@@ -54,3 +54,11 @@ export const METRICS: Metric[] = [
   { key: 'cs', title: 'Clean-sheet rate', desc: 'Share of games without conceding', value: (r) => r.cs / r.gp, fmt: pct, higherIsBetter: true },
 ]
 
+
+/** "2nd, Group 5": where a team finished in its group, in words. */
+export function groupPlaceText(team: string) {
+  const { group, position } = groupInfo(team)
+  if (group === 99) return ''
+  const ordinal = ['1st', '2nd', '3rd', '4th'][position - 1] ?? `${position}th`
+  return `${ordinal}, Group ${group}`
+}

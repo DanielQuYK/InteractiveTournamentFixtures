@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { koById } from "../lib/data"
 import { activateOnKey } from "../lib/hooks"
 import { groupSeed } from "../lib/stats"
+import { fixedMatchIds } from "../lib/simulation"
 import {
   MATCH_ORDER,
   MIN_BRACKET_RUNS,
@@ -91,6 +92,7 @@ export function CommonBracket({ run }: { run: SimulationRun }) {
   const margin = (i: number) => selected.marginSum[i] / selected.count
   const share = (i: number) => ((slotShare[i].get(winners[i]) ?? 0) / run.count) * 100
   const open = openMatch ? MATCH_ORDER.indexOf(openMatch) : -1
+  const fixed = fixedMatchIds(run.startStage)
 
   return (
     <section className="glass-surface mt-6 rounded-xl border border-stone-200 bg-white p-4 sm:p-6">
@@ -177,6 +179,7 @@ export function CommonBracket({ run }: { run: SimulationRun }) {
               winner={winners[i]}
               margin={margin(i)}
               share={share(i)}
+              official={fixed.has(id)}
               onOpen={() => setOpenMatch(id)}
               onZoom={() => zoom.go({ kind: "match", id })}
             />
@@ -220,11 +223,13 @@ interface SimulatedMatchCardProps {
   winner: string
   margin: number
   share: number
+  /** True when this match is an official result applied in every run. */
+  official: boolean
   onOpen: () => void
   onZoom: () => void
 }
 
-function SimulatedMatchCard({ id, teams, winner, margin, share, onOpen, onZoom }: SimulatedMatchCardProps) {
+function SimulatedMatchCard({ id, teams, winner, margin, share, official, onOpen, onZoom }: SimulatedMatchCardProps) {
   const match = koById(id)
   const p = POS[id]
   return (
@@ -257,32 +262,55 @@ function SimulatedMatchCard({ id, teams, winner, margin, share, onOpen, onZoom }
           </button>
         </span>
       </div>
-      {teams.map((team) => {
+      {teams.map((team, index) => {
         const won = team === winner
+        const star = official && match.scoreTbc ? "*" : ""
+        const goals = official && match.score ? match.score[index] : null
+        const pens = official && match.pens ? match.pens[index] : null
         return (
           <div
             key={team}
-            className={`flex flex-1 items-center justify-between gap-2 border-b border-white px-3 text-sm ${
-              won ? "bg-emerald-50 font-semibold text-emerald-900" : "bg-rose-50 text-rose-800"
+            className={`flex flex-1 items-center justify-between gap-2 border-b border-white border-l-4 px-3 text-sm ${
+              won
+                ? "border-l-emerald-600 bg-emerald-100 font-semibold text-emerald-950"
+                : "border-l-rose-500 bg-rose-100 text-rose-900"
             }`}
           >
             <span className="truncate">
               {team} <span className="text-[11px] font-normal opacity-80">({groupSeed(team)})</span>
             </span>
             <span
-              className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums ${
-                won ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-700"
+              className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums ${
+                won ? "bg-emerald-200 text-emerald-900" : "bg-rose-200 text-rose-800"
               }`}
             >
-              {won ? "+" : "-"}
-              {margin.toFixed(1)}
+              {goals !== null ? (
+                <>
+                  {goals}
+                  {star}
+                  {pens !== null && <span className="ml-1 font-normal">({pens}){star}</span>}
+                </>
+              ) : (
+                <>
+                  {won ? "+" : "-"}
+                  {margin.toFixed(1)}
+                </>
+              )}
             </span>
           </div>
         )
       })}
       <div className="flex items-center justify-between gap-2 px-3 py-1 text-[11px] leading-tight text-stone-600">
         <span className="truncate">{VENUE_SHORT[match.venue]}</span>
-        <span className="shrink-0">{winner} won in {share.toFixed(1)}% of runs</span>
+        <span className="shrink-0 whitespace-nowrap">
+          {official ? (
+            <span className="font-semibold text-emerald-800">
+              Official result{match.scoreTbc ? "*" : ""} · every run
+            </span>
+          ) : (
+            <>{winner} won in {share.toFixed(1)}% of runs</>
+          )}
+        </span>
       </div>
     </div>
   )

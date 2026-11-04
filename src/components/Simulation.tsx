@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from "react"
-import { ALL_KO_TEAMS } from "../lib/data"
+import { ALL_KO_TEAMS, KO_MATCHES, koWinner } from "../lib/data"
 import { SimulationCharts } from "./SimulationCharts"
 import { CommonBracket } from "./CommonBracket"
+import { AppliedResults } from "./AppliedResults"
+import { SimulationParameters } from "./SimulationParameters"
 import { EmptyComparison } from "./shared"
 import { groupSeed } from "../lib/stats"
 import {
@@ -14,8 +16,12 @@ import {
   type MatchupTally,
   type SimAggregate,
   type SimulationRun,
+  type StartStage,
+  fixedMatchIds,
+  latestStartStage,
   runOneSimulation,
   simulationStrengths,
+  startStageOptions,
 } from "../lib/simulation"
 
 /** Upper limit per run. Only compact aggregates are kept, so this affects time, not storage. */
@@ -23,6 +29,8 @@ const MAX_SIMULATIONS = 1_000_000
 
 export function Simulation() {
   const [count, setCount] = useState(1000)
+  const stageOptions = useMemo(() => startStageOptions(), [])
+  const [startStage, setStartStage] = useState<StartStage>(latestStartStage)
   const [runs, setRuns] = useState<SimulationRun[]>([])
   const [activeId, setActiveId] = useState<number | null>(null)
   const [running, setRunning] = useState(false)
@@ -44,7 +52,8 @@ export function Simulation() {
     )
     const brackets: BracketTally = new Map()
     const matchups: MatchupTally = new Map()
-    const strengths = simulationStrengths()
+    // Rounds before the chosen stage use official results; ratings use only those.
+    const strengths = simulationStrengths(fixedMatchIds(startStage))
     // Use approximately 100 equal visual steps regardless of run size. A fixed
     // batch made small runs jump abruptly and large runs appear out of sync.
     const batchSize = Math.max(1, Math.ceil(simulations / 100))
@@ -62,6 +71,7 @@ export function Simulation() {
     const run: SimulationRun = {
       id: Date.now(),
       createdAt: new Date(),
+      startStage,
       count: simulations,
       aggregates: [...aggregate.values()],
       brackets: [...brackets.values()],
@@ -134,6 +144,55 @@ export function Simulation() {
       </div>
 
       <section className="glass-surface mb-6 rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+        <fieldset disabled={running} className="mb-6">
+          <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-500">
+            Simulate from which stage?
+          </legend>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" role="radiogroup" aria-label="Starting stage">
+            {stageOptions.map((option) => {
+              const selected = startStage === option.stage
+              const fixedWinners = [...fixedMatchIds(option.stage)]
+                .map((id) => koWinner(KO_MATCHES.find((m) => m.id === id)!))
+                .filter(Boolean)
+              return (
+                <button
+                  key={option.stage}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  disabled={!option.enabled}
+                  onClick={() => setStartStage(option.stage)}
+                  className={`liquid rounded-xl border p-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 ${
+                    selected ? "border-emerald-800 bg-emerald-50 ring-2 ring-emerald-700/30" : "border-stone-300 bg-white"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <strong>{option.label}</strong>
+                    {option.recommended && (
+                      <span className="rounded-full bg-emerald-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                        Latest
+                      </span>
+                    )}
+                  </span>
+                  <span className="mt-1 block text-xs text-stone-600">{option.description}</span>
+                  {option.enabled && option.stage !== "R14" && fixedWinners.length > 0 && (
+                    <span className="mt-1.5 block text-xs text-stone-700">Already through: {fixedWinners.join(", ")}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          <p className="mt-2 text-xs text-stone-600">
+            The latest stage is recommended because it uses every result entered so far. Starting earlier ignores
+            those results, both when playing the bracket and when rating the teams.
+          </p>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-500">
+              Results applied as already played
+            </p>
+            <AppliedResults stage={startStage} />
+          </div>
+        </fieldset>
         <div className="flex flex-wrap items-end gap-4">
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-stone-500">
@@ -214,6 +273,8 @@ export function Simulation() {
         </p>
       </section>
 
+      <SimulationParameters stage={startStage} />
+
       {!active ? (
         <EmptyComparison text="Choose the number of simulations and run the model to generate probabilities." />
       ) : (
@@ -229,7 +290,7 @@ export function Simulation() {
                 >
                   {runs.map((run) => (
                     <option key={run.id} value={run.id}>
-                      {run.count.toLocaleString()} simulations ·{" "}
+                      {run.count.toLocaleString()} simulations · from {run.startStage} ·{" "}
                       {run.createdAt.toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -261,6 +322,10 @@ export function Simulation() {
             </button>
           </div>
 
+          <section className="glass-surface mb-5 rounded-xl border border-stone-200 bg-white p-4">
+            <h3 className="mb-2 font-semibold">Results applied in this run (from {active.startStage})</h3>
+            <AppliedResults stage={active.startStage} />
+          </section>
           <div
             className={`mb-5 rounded-lg border p-4 text-sm ${
               active.count < 1000
@@ -484,8 +549,20 @@ export function Simulation() {
                 goals.
               </li>
               <li>
-                Official knockout scores entered into the fixture data are fixed
-                in every run; only unresolved matches are simulated.
+                The starting stage decides which knockout results are treated as
+                played. Rounds before it use the official winners and scores in
+                every run, and only those results feed the ratings; later
+                matches are simulated.
+              </li>
+              <li>
+                Knockout results connect different groups, so each counts 1.5
+                times as much as a group game when fitting attack and defence.
+                This weight is a judgement, not a fitted value.
+              </li>
+              <li>
+                A scoreline marked to be confirmed (currently HW v SKHTSK, 1–1,
+                5–4 on penalties to SKHTSK) is used exactly as entered until it
+                is checked; it is marked with an asterisk wherever it appears.
               </li>
               <li>
                 Finishing categories are mutually exclusive: Round of 14,

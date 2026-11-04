@@ -1,6 +1,7 @@
 import {
   GROUP_MATCHES,
   KO_MATCHES,
+  koPlayed,
   koById,
   koWinner,
   slotTeam,
@@ -97,6 +98,77 @@ export interface MatchupRecord {
 
 export type MatchupTally = Map<string, MatchupRecord>
 
+/** Which stage a run starts simulating from; earlier rounds use official results. */
+export type StartStage = "R14" | "QF" | "SF" | "F"
+
+const STAGE_ORDER: StartStage[] = ["R14", "QF", "SF", "F"]
+const ROUND_INDEX: Record<string, number> = { R14: 0, QF: 1, SF: 2, TP: 3, F: 3 }
+
+/** Goals assumed for a level match whose exact scoreline is still to be confirmed. */
+const PROVISIONAL_LEVEL_GOALS = 1
+
+/** Cross-group knockout results link the groups, so they count for more than one group game. */
+export const KNOCKOUT_RATING_WEIGHT = 1.5
+
+export interface StartStageOption {
+  stage: StartStage
+  label: string
+  description: string
+  enabled: boolean
+  recommended: boolean
+  /** Official matches that will be treated as already played. */
+  fixedMatches: number
+}
+
+const STAGE_LABEL: Record<StartStage, string> = {
+  R14: "Round of 14",
+  QF: "Quarter-finals",
+  SF: "Semi-finals",
+  F: "Final and third place",
+}
+
+/** Match ids from rounds before `stage` that have a confirmed winner. */
+export function fixedMatchIds(stage: StartStage): Set<string> {
+  const cut = STAGE_ORDER.indexOf(stage)
+  return new Set(
+    KO_MATCHES.filter((m) => ROUND_INDEX[m.round] < cut && koPlayed(m)).map((m) => m.id),
+  )
+}
+
+export function startStageOptions(): StartStageOption[] {
+  const options = STAGE_ORDER.map((stage, cut) => {
+    const earlier = KO_MATCHES.filter((m) => ROUND_INDEX[m.round] < cut)
+    const enabled = earlier.every((m) => koPlayed(m))
+    return {
+      stage,
+      label: `From the ${STAGE_LABEL[stage]}`,
+      description:
+        cut === 0
+          ? "Pretend no knockout match has been played; every match is simulated."
+          : enabled
+            ? `Uses the ${earlier.length} completed earlier results as fixed and simulates the rest.`
+            : "Unavailable until every earlier match has a confirmed winner.",
+      enabled,
+      recommended: false,
+      fixedMatches: earlier.length,
+    }
+  })
+  const latest = [...options].reverse().find((o) => o.enabled)
+  if (latest) latest.recommended = true
+  return options
+}
+
+/** The latest stage whose earlier rounds are all complete, the default for a new run. */
+export const latestStartStage = (): StartStage =>
+  startStageOptions().find((o) => o.recommended)?.stage ?? "R14"
+
+/** An official score, or a provisional level score when only the winner is confirmed. */
+export function officialScore(m: (typeof KO_MATCHES)[number]): [number, number] | null {
+  if (m.score) return m.score
+  if (m.scoreTbc && koPlayed(m)) return [PROVISIONAL_LEVEL_GOALS, PROVISIONAL_LEVEL_GOALS]
+  return null
+}
+
 export interface SimulationRun {
   id: number
   createdAt: Date
@@ -106,6 +178,7 @@ export interface SimulationRun {
   brackets: BracketRecord[]
   /** Scoreline counts for every pairing that occurred, by stage (compact: at most a few hundred rows). */
   matchups: MatchupRecord[]
+  startStage: StartStage
 }
 
 export interface SimMatchResult {
@@ -141,35 +214,78 @@ export function poisson(lambda: number) {
   return value - 1
 }
 
-export function simulationStrengths() {
+/** Model settings, exported so the Simulation tab can describe them. */
+export const PRIOR_MATCHES = 3
+export const RATING_ITERATIONS = 14
+export const COMPRESS_FROM = 5
+export const COMPRESS_FACTOR = 0.45
+export const EVIDENCE_FLOOR = 0.35
+export const HOME_ADVANTAGE = 1.06
+export const LAMBDA_MIN = 0.12
+export const LAMBDA_MAX = 6
+export const EXTRA_TIME_SHARE = 1 / 3
+
+export interface TeamRatingDetail {
+  matches: number
+  knockoutMatches: number
+  /** Matches counted with knockout results weighted up. */
+  weight: number
+  goalsFor: number
+  goalsAgainst: number
+  effectiveFor: number
+  effectiveAgainst: number
+  /** Weighted average defensive-weakness factor of the opponents faced (1 = average). */
+  opponentDefence: number
+  /** Weighted average attacking factor of the opponents faced (1 = average). */
+  opponentAttack: number
+}
+
+export function simulationStrengths(
+  fixed: ReadonlySet<string> = new Set(KO_MATCHES.filter(koPlayed).map((m) => m.id)),
+) {
   // Large scorelines contain information, but the difference between scoring
   // six and fourteen is not eight times as informative. The tail is compressed
   // before fitting attack and defence, which stops one mismatch dominating.
   const effectiveGoals = (goals: number) =>
-    goals <= 5 ? goals : 5 + Math.log1p(goals - 5) * 0.45
+    goals <= COMPRESS_FROM
+      ? goals
+      : COMPRESS_FROM + Math.log1p(goals - COMPRESS_FROM) * COMPRESS_FACTOR
   const observations: {
     home: string
     away: string
     hg: number
     ag: number
+    weight: number
+    rawHome: number
+    rawAway: number
+    knockout: boolean
   }[] = GROUP_MATCHES.filter((m) => m.hs !== null && m.as !== null).map(
     (m) => ({
       home: m.home,
       away: m.away,
       hg: effectiveGoals(m.hs!),
       ag: effectiveGoals(m.as!),
+      weight: 1,
+      rawHome: m.hs!,
+      rawAway: m.as!,
+      knockout: false,
     }),
   )
 
   for (const m of KO_MATCHES) {
     const home = slotTeam(m.home),
       away = slotTeam(m.away)
-    if (m.score && home && away) {
+    const score = officialScore(m)
+    if (fixed.has(m.id) && score && home && away) {
       observations.push({
         home,
         away,
-        hg: effectiveGoals(m.score[0]),
-        ag: effectiveGoals(m.score[1]),
+        hg: effectiveGoals(score[0]),
+        ag: effectiveGoals(score[1]),
+        weight: KNOCKOUT_RATING_WEIGHT,
+        rawHome: score[0],
+        rawAway: score[1],
+        knockout: true,
       })
     }
   }
@@ -177,7 +293,7 @@ export function simulationStrengths() {
   const teams = [...new Set(observations.flatMap((m) => [m.home, m.away]))]
   const totalGoals = observations.reduce((sum, m) => sum + m.hg + m.ag, 0)
   const average = totalGoals / Math.max(1, observations.length * 2)
-  const priorGames = 3
+  const priorGames = PRIOR_MATCHES
   let attack = new Map(teams.map((team) => [team, 1]))
   let defence = new Map(teams.map((team) => [team, 1]))
 
@@ -185,19 +301,20 @@ export function simulationStrengths() {
   // more, while conceding to a strong attack is penalised less. Bayesian
   // shrinkage keeps small or unusually easy groups close to the competition
   // baseline until cross-group knockout evidence becomes available.
-  for (let iteration = 0; iteration < 14; iteration++) {
+  for (let iteration = 0; iteration < RATING_ITERATIONS; iteration++) {
     const totals = new Map(
       teams.map((team) => [team, { attack: 0, defence: 0, games: 0 }]),
     )
     for (const m of observations) {
       const h = totals.get(m.home)!,
         a = totals.get(m.away)!
-      h.attack += m.hg / Math.max(0.35, average * defence.get(m.away)!)
-      h.defence += m.ag / Math.max(0.35, average * attack.get(m.away)!)
-      a.attack += m.ag / Math.max(0.35, average * defence.get(m.home)!)
-      a.defence += m.hg / Math.max(0.35, average * attack.get(m.home)!)
-      h.games++
-      a.games++
+      const w = m.weight
+      h.attack += (w * m.hg) / Math.max(EVIDENCE_FLOOR, average * defence.get(m.away)!)
+      h.defence += (w * m.ag) / Math.max(EVIDENCE_FLOOR, average * attack.get(m.away)!)
+      a.attack += (w * m.ag) / Math.max(EVIDENCE_FLOOR, average * defence.get(m.home)!)
+      a.defence += (w * m.hg) / Math.max(EVIDENCE_FLOOR, average * attack.get(m.home)!)
+      h.games += w
+      a.games += w
     }
     const nextAttack = new Map<string, number>()
     const nextDefence = new Map<string, number>()
@@ -226,8 +343,38 @@ export function simulationStrengths() {
     )
   }
 
+  // Evidence summary behind each team's final ratings, for the parameters panel.
+  const details = new Map<string, TeamRatingDetail>(
+    teams.map((team) => [
+      team,
+      { matches: 0, knockoutMatches: 0, weight: 0, goalsFor: 0, goalsAgainst: 0, effectiveFor: 0, effectiveAgainst: 0, opponentDefence: 0, opponentAttack: 0 },
+    ]),
+  )
+  for (const m of observations) {
+    for (const side of [0, 1] as const) {
+      const team = side === 0 ? m.home : m.away
+      const opponent = side === 0 ? m.away : m.home
+      const d = details.get(team)!
+      d.matches++
+      if (m.knockout) d.knockoutMatches++
+      d.weight += m.weight
+      d.goalsFor += side === 0 ? m.rawHome : m.rawAway
+      d.goalsAgainst += side === 0 ? m.rawAway : m.rawHome
+      d.effectiveFor += side === 0 ? m.hg : m.ag
+      d.effectiveAgainst += side === 0 ? m.ag : m.hg
+      d.opponentDefence += m.weight * defence.get(opponent)!
+      d.opponentAttack += m.weight * attack.get(opponent)!
+    }
+  }
+  for (const d of details.values()) {
+    d.opponentDefence /= Math.max(d.weight, 1e-9)
+    d.opponentAttack /= Math.max(d.weight, 1e-9)
+  }
+
   return {
     average,
+    fixed,
+    details,
     records: new Map(
       teams.map((team) => [
         team,
@@ -247,14 +394,15 @@ export function simulateMatch(
   strengths: ReturnType<typeof simulationStrengths>,
 ): SimMatchResult {
   const official = koById(id)
-  if (official.score) {
+  const score = officialScore(official)
+  if (strengths.fixed.has(id) && score) {
     const winner = koWinner(official)
     if (winner) {
       return {
         home,
         away,
-        hg: official.score[0],
-        ag: official.score[1],
+        hg: score[0],
+        ag: score[1],
         winner,
         loser: winner === home ? away : home,
       }
@@ -264,11 +412,11 @@ export function simulateMatch(
   const neutral = { attack: strengths.average, defence: strengths.average }
   const h = strengths.records.get(home) ?? neutral
   const a = strengths.records.get(away) ?? neutral
-  const homeAdvantage = 1.06
+  const homeAdvantage = HOME_ADVANTAGE
   const homeLambda = Math.min(
-    6,
+    LAMBDA_MAX,
     Math.max(
-      0.12,
+      LAMBDA_MIN,
       strengths.average *
         (h.attack / strengths.average) *
         (a.defence / strengths.average) *
@@ -276,9 +424,9 @@ export function simulateMatch(
     ),
   )
   const awayLambda = Math.min(
-    6,
+    LAMBDA_MAX,
     Math.max(
-      0.12,
+      LAMBDA_MIN,
       (strengths.average *
         (a.attack / strengths.average) *
         (h.defence / strengths.average)) /
@@ -291,8 +439,8 @@ export function simulateMatch(
   // A knockout tie proceeds through extra time; a remaining tie is resolved
   // by a strength-weighted shoot-out. Shoot-out kicks are not counted as goals.
   if (hg === ag) {
-    hg += poisson(homeLambda / 3)
-    ag += poisson(awayLambda / 3)
+    hg += poisson(homeLambda * EXTRA_TIME_SHARE)
+    ag += poisson(awayLambda * EXTRA_TIME_SHARE)
   }
   let winner: string
   if (hg !== ag) {

@@ -7,17 +7,30 @@ export function validateResults(results = KO_RESULTS): string[] {
   for (const [id, r] of Object.entries(results)) {
     const m = KO_MATCHES.find((x) => x.id === id)
     if (!m) { issues.push(`Result entered for unknown match "${id}".`); continue }
-    const ints = [...r.score, ...(r.pens ?? [])]
+    if (!r.score && !r.winner) {
+      issues.push(`${m.label}: enter a score, or a confirmed winner with the scoreline to be confirmed.`)
+      continue
+    }
+    const ints = [...(r.score ?? []), ...(r.pens ?? [])]
     if (ints.some((n) => !Number.isInteger(n) || n < 0)) {
       issues.push(`${m.label}: scores must be whole numbers of zero or more.`)
       continue
     }
-    if (!slotTeam(m.home) || !slotTeam(m.away)) {
+    const home = slotTeam(m.home), away = slotTeam(m.away)
+    if (!home || !away) {
       issues.push(`${m.label}: a result is entered before both teams are known. Enter the earlier rounds first.`)
+    } else if (r.winner && r.winner !== home && r.winner !== away) {
+      issues.push(`${m.label}: the winner "${r.winner}" is not one of the two teams (${home}, ${away}).`)
     }
-    const level = r.score[0] === r.score[1]
-    if (level && !r.pens) issues.push(`${m.label}: the score is level (${r.score[0]}–${r.score[1]}); add a penalty shoot-out result.`)
-    if (!level && r.pens) issues.push(`${m.label}: a shoot-out was entered but the score is not level.`)
+    if (r.winner && r.score && r.score[0] !== r.score[1] && home && away) {
+      const scoreWinner = r.score[0] > r.score[1] ? home : away
+      if (scoreWinner !== r.winner) issues.push(`${m.label}: the winner does not match the score entered.`)
+    }
+    if (r.score && !r.winner) {
+      const level = r.score[0] === r.score[1]
+      if (level && !r.pens) issues.push(`${m.label}: the score is level (${r.score[0]}–${r.score[1]}); add a penalty shoot-out result or a confirmed winner.`)
+    }
+    if (r.score && r.score[0] !== r.score[1] && r.pens) issues.push(`${m.label}: a shoot-out was entered but the score is not level.`)
     if (r.pens && r.pens[0] === r.pens[1]) issues.push(`${m.label}: a shoot-out must have a winner.`)
   }
   return issues

@@ -1,8 +1,9 @@
 import { type ReactNode } from 'react'
 import { useDialog } from '../lib/hooks'
-import { KO_MATCHES, ROUND_NAME, VENUES, VENUE_SHORT, fmtDate, koById, slotTeam, type Slot } from '../lib/data'
+import { KO_MATCHES, ROUND_NAME, VENUES, VENUE_SHORT, fmtDate, koById, koPlayed, koWinner, slotTeam, type Slot } from '../lib/data'
 import { type Detail, TeamBtn, describeSource, remarkText } from './shared'
-import { groupSeed } from '../lib/stats'
+import { groupPlaceText } from '../lib/stats'
+import { TBC_REMARK, beatLine, winnerGoals } from '../lib/matchText'
 
 /* ---------- Match detail modal ---------- */
 
@@ -11,8 +12,10 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
 
   let title = '', subtitle = '', date = '', time = '', venue = '', status = ''
   let home: string | null = null, away: string | null = null
-  let homeLabel = '', awayLabel = '', score = 'v', extra: string[] = [], homeSeed = '', awaySeed = ''
+  let homeLabel = '', awayLabel = '', score = 'v', extra: string[] = []
   let homeSlot: Slot | null = null, awaySlot: Slot | null = null
+  let penalties = ''
+  let winnerName: string | null = null
 
   if (detail.kind === 'group') {
     const m = detail.m
@@ -29,16 +32,23 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
     home = slotTeam(m.home); away = slotTeam(m.away)
     homeLabel = home ?? describeSource(m.home); awayLabel = away ?? describeSource(m.away)
     homeSlot = m.home; awaySlot = m.away
-    if (m.home.kind === 'team') homeSeed = m.home.seed
-    if (m.away.kind === 'team') awaySeed = m.away.seed
-    if (m.score) score = `${m.score[0]} : ${m.score[1]}`
-    status = m.score ? 'Full time' : home && away ? 'Scheduled' : 'Awaiting earlier results'
+    const star = m.scoreTbc ? '*' : ''
+    if (m.score) score = `${m.score[0]} : ${m.score[1]}${star}`
+    else if (m.scoreTbc) score = 'TBC*'
+    if (m.pens) penalties = `Pens ${m.pens[0]} : ${m.pens[1]}${star}`
+    status = koPlayed(m) ? (m.score ? 'Full time' : 'Winner confirmed') : home && away ? 'Scheduled' : 'Awaiting earlier results'
+    winnerName = koWinner(m)
+    const info = winnerGoals(m)
+    if (info?.pens && winnerName) {
+      extra.push(`${winnerName} won ${info.pens[0]}–${info.pens[1]} on penalties after a ${info.goals[0]}–${info.goals[1]} full-time score${m.scoreTbc ? '*' : ''}.`)
+    }
+    if (m.scoreTbc) extra.push(TBC_REMARK)
     const next = KO_MATCHES.find((x) => (x.home.kind === 'winner' && x.home.of === m.id) || (x.away.kind === 'winner' && x.away.of === m.id))
     if (next) extra.push(`The winner advances to ${next.label} on ${fmtDate(next.date)}, ${next.time}, ${VENUE_SHORT[next.venue]}.`)
     if (m.round === 'SF') extra.push('The loser proceeds to the third-place play-off on 2 December 2026.')
     if (m.round === 'F') extra.push('The winner is crowned champion of Division Three (HK) Boys A Grade.')
     if (m.round === 'TP') extra.push('Contested by the two losing semi-finalists.')
-    if (!m.score) extra.push('Knockout matches are decided on the day; the first-named team is the home team.')
+    if (!koPlayed(m)) extra.push('Knockout matches are decided on the day; the first-named team is the home team.')
   }
 
   // Exactly two possible occupants: the feeder match has both teams confirmed
@@ -60,7 +70,7 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
 
   // Each side has a main area (aligned with the score) and an optional caption
   // beneath it, so captions on both sides sit on a shared baseline.
-  const sideParts = (name: string | null, label: string, seed: string, align: 'left' | 'right', slot: Slot | null) => {
+  const sideParts = (name: string | null, label: string, align: 'left' | 'right', slot: Slot | null) => {
     const justify = align === 'right' ? 'justify-end' : 'justify-start'
     const textAlign = align === 'right' ? 'text-right' : 'text-left'
     const options = candidates(slot)
@@ -72,14 +82,14 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
           {options.teams.map((t) => (
             <li key={t} className={textAlign}>
               <TeamBtn name={t} onTeam={onTeam} className="text-lg" />
-              <div className="text-xs text-stone-500">{groupSeed(t)}</div>
+              <div className="text-xs text-stone-500">{groupPlaceText(t)}</div>
             </li>
           ))}
         </ul>
       )
       caption = sourceLines(slot as Slot & { kind: 'winner' | 'loser' })
     } else {
-      const shownSeed = seed || (name ? groupSeed(name) : '')
+      const shownSeed = name ? groupPlaceText(name) : ''
       main = (
         <div className={textAlign}>
           {name ? <TeamBtn name={name} onTeam={onTeam} className="text-xl" /> : <span className="text-sm italic text-stone-500">{label}</span>}
@@ -87,15 +97,27 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
         </div>
       )
       if (slot && name) {
-        if (slot.kind === 'team') caption = slot.seed.endsWith(' – bye') ? ['BYE'] : ['Qualified as', slot.seed]
-        else caption = sourceLines(slot)
+        if (slot.kind === 'team') caption = slot.seed.endsWith(' – bye') ? ['BYE'] : ['Qualified from', groupPlaceText(name)]
+        else {
+          const source = beatLine(koById(slot.of))
+          caption = source ? [...sourceLines(slot), source] : sourceLines(slot)
+        }
       }
     }
-    return { main: <div className={`flex items-center ${justify}`}>{main}</div>, caption, justify }
+    const tone = !name || !winnerName ? '' : name === winnerName ? 'border-emerald-300 bg-emerald-100 text-emerald-950' : 'border-rose-300 bg-rose-100 text-rose-950'
+    return {
+      main: (
+        <div className={`flex items-center ${justify}`}>
+          <div className={`liquid rounded-xl border px-3 py-2 ${tone || 'border-transparent'}`}>{main}</div>
+        </div>
+      ),
+      caption,
+      justify,
+    }
   }
 
-  const left = sideParts(home, homeLabel, homeSeed, 'left', homeSlot)
-  const right = sideParts(away, awayLabel, awaySeed, 'right', awaySlot)
+  const left = sideParts(home, homeLabel, 'left', homeSlot)
+  const right = sideParts(away, awayLabel, 'right', awaySlot)
   const hasCaption = Boolean(left.caption || right.caption)
   const captionBox = (lines: string[] | null, justify: string) => (
     <div className={`flex ${justify}`}>
@@ -120,8 +142,9 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 px-6 py-5">
           {left.main}
           <div className="text-center">
-            <div className="text-3xl font-semibold tabular-nums">{score}</div>
-            <div className="mt-1 text-[11px] uppercase tracking-wide text-stone-500">{status}</div>
+            <div className="whitespace-nowrap text-3xl font-semibold tabular-nums">{score}</div>
+            {penalties && <div className="whitespace-nowrap text-sm font-medium tabular-nums text-stone-700">{penalties}</div>}
+            <div className="mt-1 whitespace-nowrap text-[11px] uppercase tracking-wide text-stone-500">{status}</div>
           </div>
           {right.main}
           {hasCaption && (
@@ -139,7 +162,7 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
         </dl>
         {extra.length > 0 && (
           <div className="space-y-1 border-t border-stone-200 bg-stone-50/80 px-6 py-4 text-xs text-stone-600">
-            {extra.map((e) => <p key={e}>{e}</p>)}
+            {extra.map((e) => <p key={e} className={e === TBC_REMARK ? 'font-medium text-amber-800' : ''}>{e}</p>)}
           </div>
         )}
       </div>

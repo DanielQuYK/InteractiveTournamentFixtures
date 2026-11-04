@@ -28,6 +28,7 @@ function makeRun(count: number): SimulationRun {
     aggregates: [...aggregate.values()],
     brackets: [...brackets.values()],
     matchups: [...matchups.values()],
+    startStage: "R14",
   }
 }
 

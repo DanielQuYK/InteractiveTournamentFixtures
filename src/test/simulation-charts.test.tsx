@@ -13,6 +13,7 @@ const run: SimulationRun = {
   count: 10,
   brackets: [],
   matchups: [],
+  startStage: "R14",
   aggregates: [
     { ...emptyAggregate("HKUGA"), gf: 10, ga: 30 },
     { ...emptyAggregate("CANADIAN"), gf: 30, ga: 10 },

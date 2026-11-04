@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   GROUPS,
   KO_MATCHES,
@@ -22,13 +22,26 @@ import {
 } from "../lib/simulation"
 import { ALL_KO_TEAMS } from "../lib/data"
 
-const reset = () =>
+// These tests describe an empty bracket, so clear the real results first and restore them after.
+const snapshot = KO_MATCHES.map((m) => ({
+  id: m.id,
+  score: m.score,
+  pens: m.pens,
+  winnerTeam: m.winnerTeam,
+  scoreTbc: m.scoreTbc,
+}))
+const clear = () =>
   KO_MATCHES.forEach((m) => {
     delete m.score
     delete m.pens
+    delete m.winnerTeam
+    delete m.scoreTbc
   })
+const restore = () =>
+  snapshot.forEach((saved) => Object.assign(koById(saved.id), saved))
+beforeEach(clear)
 afterEach(() => {
-  reset()
+  restore()
   vi.restoreAllMocks()
 })
 
