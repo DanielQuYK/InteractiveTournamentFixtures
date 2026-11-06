@@ -53,7 +53,7 @@ export function TeamStats({ onTeam }: { onTeam: (t: string) => void }) {
           Team-level statistics, expressed per game, are derived from all completed matches. The figure in brackets is the number of games played,
           which should be considered when comparing teams with small samples. Individual player statistics are not available.
         </p>
-        <p className="mt-2 text-xs text-stone-500">Cancelled fixtures and those involving the withdrawn team are excluded. Walk-overs are counted at their recorded score. Completed knockout matches count; a match whose scoreline is still to be confirmed is not included until it is.</p>
+        <p className="mt-2 text-xs text-stone-500">Cancelled fixtures and those involving the withdrawn team are excluded. Walk-overs are counted at their recorded score. Completed knockout matches are included.</p>
       </div>
 
       <div className="glass-surface mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-stone-200 p-3">
@@ -352,4 +352,3 @@ export function TeamStatCard({ rec, metrics, onTeam }: { rec: TeamRec; metrics: 
     </section>
   )
 }
-

@@ -3,6 +3,7 @@ import { useDialog } from '../lib/hooks'
 import { KO_MATCHES, ROUND_NAME, VENUES, VENUE_SHORT, fmtDate, koById, koPlayed, koWinner, slotTeam, type Slot } from '../lib/data'
 import { type Detail, TeamBtn, describeSource, remarkText } from './shared'
 import { groupPlaceText } from '../lib/stats'
+import { PredictionToggle } from './MatchPredictionPanel'
 import { TBC_REMARK, beatLine, winnerGoals } from '../lib/matchText'
 
 /* ---------- Match detail modal ---------- */
@@ -108,7 +109,7 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
     return {
       main: (
         <div className={`flex items-center ${justify}`}>
-          <div className={`liquid rounded-xl border px-3 py-2 ${tone || 'border-transparent'}`}>{main}</div>
+          <div className={`liquid min-w-0 max-w-full rounded-xl border px-3 py-2 ${tone || 'border-transparent'}`}>{main}</div>
         </div>
       ),
       caption,
@@ -122,7 +123,7 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
   const captionBox = (lines: string[] | null, justify: string) => (
     <div className={`flex ${justify}`}>
       {lines && (
-        <p className="mt-3 w-48 border-t border-stone-200 pt-2 text-center text-xs italic leading-snug text-stone-500">
+        <p className="mt-3 w-full max-w-48 border-t border-stone-200 pt-2 text-center text-xs italic leading-snug text-stone-500">
           {lines.map((l) => <span key={l} className="block">{l}</span>)}
         </p>
       )}
@@ -131,7 +132,7 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-900/30 p-4 backdrop-blur-[2px]" onClick={onClose}>
-      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Match details" className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-white/60 bg-white/90 shadow-2xl backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Match details" className="relative max-h-[92vh] w-full max-w-2xl overflow-x-hidden overflow-y-auto rounded-2xl border border-white/60 bg-white/90 shadow-2xl backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} aria-label="Close" className="liquid absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-stone-600">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M2 2l10 10M12 2L2 12" /></svg>
         </button>
@@ -139,7 +140,7 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800">{title}</p>
           <p className="text-sm text-stone-500">{subtitle}</p>
         </div>
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 px-6 py-5">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-3 px-4 py-5 sm:px-6">
           {left.main}
           <div className="text-center">
             <div className="whitespace-nowrap text-3xl font-semibold tabular-nums">{score}</div>
@@ -162,9 +163,11 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
         </dl>
         {extra.length > 0 && (
           <div className="space-y-1 border-t border-stone-200 bg-stone-50/80 px-6 py-4 text-xs text-stone-600">
-            {extra.map((e) => <p key={e} className={e === TBC_REMARK ? 'font-medium text-amber-800' : ''}>{e}</p>)}
+            {extra.map((e) => <p key={e} className={`break-words ${e === TBC_REMARK ? 'font-medium text-amber-800' : ''}`}>{e}</p>)}
           </div>
         )}
+        {/* Only offered once both teams are confirmed: otherwise there is no single pairing to describe. */}
+        {detail.kind === 'ko' && !koPlayed(koById(detail.id)) && home && away && <PredictionToggle matchId={detail.id} />}
       </div>
     </div>
   )

@@ -1,9 +1,14 @@
 import { useMemo, useState } from "react"
-import { VENUES, fmtDate, koById } from "../lib/data"
+import { VENUES, fmtDate, koById, koWinner, slotTeam } from "../lib/data"
+import { bracketSide } from "../lib/bracketLayout"
+import { TBC_REMARK } from "../lib/matchText"
+import { GRID_SIZE } from "../lib/prediction"
+import { ResultGrid, WinProbabilityBar } from "./MatchPredictionPanel"
 import { useDialog } from "../lib/hooks"
 import { groupSeed } from "../lib/stats"
 import {
   MATCH_ORDER,
+  fixedMatchIds,
   probabilityInterval,
   type MatchupRecord,
   type SimulationRun,
@@ -80,6 +85,10 @@ export function MatchupScorelines({
   }, [record, stage, home])
 
   const match = koById(matchId)
+  // A match already played before this run's starting stage is simply a fact in this world.
+  const official = fixedMatchIds(run.startStage).has(matchId)
+  // Teams from the same half of the bracket can only meet once, so no stage split is needed.
+  const crossSide = bracketSide(home) !== bracketSide(away)
   const pct = (n: number, of: number) => ((n / of) * 100).toFixed(1)
   const totalMeetings = record
     ? stageIds.reduce((sum, id) => sum + record.stages[id].count, 0)
@@ -88,6 +97,31 @@ export function MatchupScorelines({
   const tied = summary
     ? summary.rows.filter((r) => r[1] === top?.[1]).length
     : 0
+  // Full-time outcome shares from the simulated scorelines (a level score goes to penalties).
+  const fullTime = summary
+    ? summary.rows.reduce(
+        (acc, [score, n]) => {
+          const [a, b] = score.split("-").map(Number)
+          if (a > b) acc.home += n
+          else if (a < b) acc.away += n
+          else acc.draw += n
+          return acc
+        },
+        { home: 0, draw: 0, away: 0 },
+      )
+    : null
+  // Share of simulated results for each score up to GRID_SIZE goals a side (rows: home goals).
+  const grid = summary
+    ? summary.rows.reduce(
+        (g, [score, n]) => {
+          const [a, b] = score.split("-").map(Number)
+          if (a <= GRID_SIZE && b <= GRID_SIZE) g[a][b] += n / summary.meetings
+          return g
+        },
+        Array.from({ length: GRID_SIZE + 1 }, () => new Array<number>(GRID_SIZE + 1).fill(0)),
+      )
+    : null
+  const outsideGrid = grid ? 1 - grid.flat().reduce((t, v) => t + v, 0) : 0
   const range =
     top && summary ? probabilityInterval(top[1], summary.meetings) : null
 
@@ -125,7 +159,7 @@ export function MatchupScorelines({
 
         <div className="px-6 pb-3 pt-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800">
-            Simulated scorelines
+            {official ? "Official result" : "Simulated scorelines"}
           </p>
           <h4 className="mt-1 text-xl font-semibold">
             {home}{" "}
@@ -143,27 +177,31 @@ export function MatchupScorelines({
           </p>
         </div>
 
-        {!record || !summary ? (
+        {official ? (
+          <OfficialBody matchId={matchId} />
+        ) : !record || !summary ? (
           <p className="px-6 pb-6 text-sm text-stone-600">
             No simulated meetings of these teams were recorded.
           </p>
         ) : (
           <div className="space-y-5 px-6 pb-6">
-            <p className="rounded-lg bg-stone-100 p-3 text-sm text-stone-700">
-              These two teams met in{" "}
-              <strong>{totalMeetings.toLocaleString()}</strong> of{" "}
-              {run.count.toLocaleString()} simulations (
-              {pct(totalMeetings, run.count)}%) — at any stage, whatever the
-              rest of the bracket looked like.
-              {totalMeetings < SMALL_SAMPLE && (
-                <span className="mt-1 block font-medium text-amber-800">
-                  Small sample: with only {totalMeetings} meetings, the
-                  percentages below are unreliable.
-                </span>
-              )}
-            </p>
+            {crossSide && (
+              <p className="rounded-lg bg-stone-100 p-3 text-sm text-stone-700">
+                These two teams met in{" "}
+                <strong>{totalMeetings.toLocaleString()}</strong> of{" "}
+                {run.count.toLocaleString()} simulations (
+                {pct(totalMeetings, run.count)}%) — at any stage, whatever the
+                rest of the bracket looked like.
+              </p>
+            )}
+            {totalMeetings < SMALL_SAMPLE && (
+              <p className="font-medium text-amber-800">
+                Small sample: with only {totalMeetings} meetings, the percentages
+                below are unreliable.
+              </p>
+            )}
 
-            {stageIds.length > 1 && (
+            {crossSide && stageIds.length > 1 && (
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">
                   This pairing can meet at more than one stage
@@ -196,10 +234,39 @@ export function MatchupScorelines({
                 </div>
               </div>
             )}
-            {stageIds.length === 1 && (
+            {crossSide && stageIds.length === 1 && (
               <p className="text-xs text-stone-600">
                 Only ever met at: {STAGE_NAME[stageIds[0]]}.
               </p>
+            )}
+
+            {fullTime && summary && (
+              <section>
+                <h5 className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-stone-600">
+                  Full-time win probability
+                </h5>
+                <WinProbabilityBar
+                  homeLabel={home}
+                  awayLabel={away}
+                  home={fullTime.home / summary.meetings}
+                  draw={fullTime.draw / summary.meetings}
+                  away={fullTime.away / summary.meetings}
+                />
+              </section>
+            )}
+
+            {grid && summary && (
+              <section>
+                <h5 className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">
+                  Result probability
+                </h5>
+                <ResultGrid grid={grid} homeLabel={home} awayLabel={away} />
+                {outsideGrid > 0.0005 && (
+                  <p className="mt-2 text-xs text-stone-600">
+                    Scores above {GRID_SIZE} goals for either side make up the other {(outsideGrid * 100).toFixed(1)}%.
+                  </p>
+                )}
+              </section>
             )}
 
             {top && range && (
@@ -271,6 +338,7 @@ export function MatchupScorelines({
               )}
             </div>
 
+            {crossSide && (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">
                 Who won
@@ -298,16 +366,55 @@ export function MatchupScorelines({
                 </span>
               </div>
             </div>
+            )}
 
             <p className="text-xs leading-relaxed text-stone-600">
-              Scorelines include extra time. A level scoreline means the match
-              went to a shoot-out, whose winner is counted in “Who won”.
-              Percentages are shares of simulated meetings of this pairing, not
-              of all runs. Intervals cover simulation randomness only.
+              Scorelines are full-time results (no extra time); a level scoreline means a
+              shoot-out. Percentages are shares of this match’s simulated
+              results. Intervals cover simulation randomness only.
             </p>
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/** A match played before the simulation starts: just the actual fixture, with no probabilities. */
+function OfficialBody({ matchId }: { matchId: string }) {
+  const m = koById(matchId)
+  const winner = koWinner(m)
+  const star = m.scoreTbc ? "*" : ""
+  const sides = [
+    { team: slotTeam(m.home)!, goals: m.score?.[0], pens: m.pens?.[0] },
+    { team: slotTeam(m.away)!, goals: m.score?.[1], pens: m.pens?.[1] },
+  ]
+  return (
+    <div className="space-y-3 px-6 pb-6">
+      <div className="overflow-hidden rounded-xl border border-stone-300">
+        {sides.map((side) => {
+          const won = side.team === winner
+          return (
+            <div
+              key={side.team}
+              className={`flex items-center justify-between gap-3 border-l-4 px-4 py-3 ${
+                won
+                  ? "border-emerald-600 bg-emerald-100 font-semibold text-emerald-950"
+                  : "border-rose-500 bg-rose-100 text-rose-900"
+              }`}
+            >
+              <span className="text-lg">{side.team}</span>
+              <span className="whitespace-nowrap text-2xl tabular-nums">
+                {side.goals !== undefined ? `${side.goals}${star}` : ""}
+                {side.pens !== undefined && (
+                  <span className="ml-2 text-base font-normal">({side.pens}){star}</span>
+                )}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+      {m.scoreTbc && <p className="text-xs font-medium text-amber-800">{TBC_REMARK}</p>}
     </div>
   )
 }

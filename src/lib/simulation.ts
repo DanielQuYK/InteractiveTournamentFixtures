@@ -1,3 +1,4 @@
+import { DEFAULT_PARAMS, sanitizeOverrides, sanitizeParams, type ModelParams, type RatingOverrides } from "./modelParams"
 import {
   GROUP_MATCHES,
   KO_MATCHES,
@@ -107,8 +108,6 @@ const ROUND_INDEX: Record<string, number> = { R14: 0, QF: 1, SF: 2, TP: 3, F: 3 
 /** Goals assumed for a level match whose exact scoreline is still to be confirmed. */
 const PROVISIONAL_LEVEL_GOALS = 1
 
-/** Cross-group knockout results link the groups, so they count for more than one group game. */
-export const KNOCKOUT_RATING_WEIGHT = 1.5
 
 export interface StartStageOption {
   stage: StartStage
@@ -179,6 +178,8 @@ export interface SimulationRun {
   /** Scoreline counts for every pairing that occurred, by stage (compact: at most a few hundred rows). */
   matchups: MatchupRecord[]
   startStage: StartStage
+  /** True when the run used edited model parameters or team ratings. */
+  customised?: boolean
 }
 
 export interface SimMatchResult {
@@ -214,17 +215,6 @@ export function poisson(lambda: number) {
   return value - 1
 }
 
-/** Model settings, exported so the Simulation tab can describe them. */
-export const PRIOR_MATCHES = 3
-export const RATING_ITERATIONS = 14
-export const COMPRESS_FROM = 5
-export const COMPRESS_FACTOR = 0.45
-export const EVIDENCE_FLOOR = 0.35
-export const HOME_ADVANTAGE = 1.06
-export const LAMBDA_MIN = 0.12
-export const LAMBDA_MAX = 6
-export const EXTRA_TIME_SHARE = 1 / 3
-
 export interface TeamRatingDetail {
   matches: number
   knockoutMatches: number
@@ -242,14 +232,17 @@ export interface TeamRatingDetail {
 
 export function simulationStrengths(
   fixed: ReadonlySet<string> = new Set(KO_MATCHES.filter(koPlayed).map((m) => m.id)),
+  settings: ModelParams = DEFAULT_PARAMS,
+  overrides: RatingOverrides = {},
 ) {
+  const params = sanitizeParams(settings)
   // Large scorelines contain information, but the difference between scoring
   // six and fourteen is not eight times as informative. The tail is compressed
   // before fitting attack and defence, which stops one mismatch dominating.
   const effectiveGoals = (goals: number) =>
-    goals <= COMPRESS_FROM
+    goals <= params.compressFrom
       ? goals
-      : COMPRESS_FROM + Math.log1p(goals - COMPRESS_FROM) * COMPRESS_FACTOR
+      : params.compressFrom + Math.log1p(goals - params.compressFrom) * params.compressFactor
   const observations: {
     home: string
     away: string
@@ -282,7 +275,7 @@ export function simulationStrengths(
         away,
         hg: effectiveGoals(score[0]),
         ag: effectiveGoals(score[1]),
-        weight: KNOCKOUT_RATING_WEIGHT,
+        weight: params.knockoutWeight,
         rawHome: score[0],
         rawAway: score[1],
         knockout: true,
@@ -292,8 +285,9 @@ export function simulationStrengths(
 
   const teams = [...new Set(observations.flatMap((m) => [m.home, m.away]))]
   const totalGoals = observations.reduce((sum, m) => sum + m.hg + m.ag, 0)
-  const average = totalGoals / Math.max(1, observations.length * 2)
-  const priorGames = PRIOR_MATCHES
+  const calculatedAverage = totalGoals / Math.max(1, observations.length * 2)
+  const average = params.baselineOverride ?? calculatedAverage
+  const priorGames = params.priorMatches
   let attack = new Map(teams.map((team) => [team, 1]))
   let defence = new Map(teams.map((team) => [team, 1]))
 
@@ -301,7 +295,7 @@ export function simulationStrengths(
   // more, while conceding to a strong attack is penalised less. Bayesian
   // shrinkage keeps small or unusually easy groups close to the competition
   // baseline until cross-group knockout evidence becomes available.
-  for (let iteration = 0; iteration < RATING_ITERATIONS; iteration++) {
+  for (let iteration = 0; iteration < params.iterations; iteration++) {
     const totals = new Map(
       teams.map((team) => [team, { attack: 0, defence: 0, games: 0 }]),
     )
@@ -309,10 +303,10 @@ export function simulationStrengths(
       const h = totals.get(m.home)!,
         a = totals.get(m.away)!
       const w = m.weight
-      h.attack += (w * m.hg) / Math.max(EVIDENCE_FLOOR, average * defence.get(m.away)!)
-      h.defence += (w * m.ag) / Math.max(EVIDENCE_FLOOR, average * attack.get(m.away)!)
-      a.attack += (w * m.ag) / Math.max(EVIDENCE_FLOOR, average * defence.get(m.home)!)
-      a.defence += (w * m.hg) / Math.max(EVIDENCE_FLOOR, average * attack.get(m.home)!)
+      h.attack += (w * m.hg) / Math.max(params.evidenceFloor, average * defence.get(m.away)!)
+      h.defence += (w * m.ag) / Math.max(params.evidenceFloor, average * attack.get(m.away)!)
+      a.attack += (w * m.ag) / Math.max(params.evidenceFloor, average * defence.get(m.home)!)
+      a.defence += (w * m.hg) / Math.max(params.evidenceFloor, average * attack.get(m.home)!)
       h.games += w
       a.games += w
     }
@@ -371,21 +365,58 @@ export function simulationStrengths(
     d.opponentAttack /= Math.max(d.weight, 1e-9)
   }
 
+  const clean = sanitizeOverrides(overrides)
   return {
     average,
+    calculatedAverage,
     fixed,
     details,
+    params,
+    /** Fitted multipliers before any user override. */
+    fitted: new Map(teams.map((team) => [team, { attack: attack.get(team)!, weakness: defence.get(team)! }])),
+    overrides: clean,
     records: new Map(
       teams.map((team) => [
         team,
         {
-          attack: attack.get(team)! * average,
-          defence: defence.get(team)! * average,
+          attack: (clean[team]?.attack ?? attack.get(team)!) * average,
+          defence: (clean[team]?.weakness ?? defence.get(team)!) * average,
         },
       ]),
     ),
   }
 }
+
+/** Expected goals for each side in a full-time period (35 minutes each half). */
+export function expectedGoals(
+  home: string,
+  away: string,
+  strengths: ReturnType<typeof simulationStrengths>,
+) {
+  const neutral = { attack: strengths.average, defence: strengths.average }
+  const h = strengths.records.get(home) ?? neutral
+  const a = strengths.records.get(away) ?? neutral
+  const { homeAdvantage, lambdaMin, lambdaMax } = strengths.params
+  const clamp = (v: number) => Math.min(lambdaMax, Math.max(lambdaMin, v))
+  return {
+    homeLambda: clamp(
+      strengths.average *
+        (h.attack / strengths.average) *
+        (a.defence / strengths.average) *
+        homeAdvantage,
+    ),
+    awayLambda: clamp(
+      (strengths.average *
+        (a.attack / strengths.average) *
+        (h.defence / strengths.average)) /
+        homeAdvantage,
+    ),
+  }
+}
+
+/** Chance the first-named team wins a shoot-out, tilted mildly by expected goals. */
+export const penaltyHomeChance = (homeLambda: number, awayLambda: number, tilt = 1) =>
+  0.5 + tilt * (homeLambda / (homeLambda + awayLambda) - 0.5)
 
 export function simulateMatch(
   id: string,
@@ -409,45 +440,18 @@ export function simulateMatch(
     }
   }
 
-  const neutral = { attack: strengths.average, defence: strengths.average }
-  const h = strengths.records.get(home) ?? neutral
-  const a = strengths.records.get(away) ?? neutral
-  const homeAdvantage = HOME_ADVANTAGE
-  const homeLambda = Math.min(
-    LAMBDA_MAX,
-    Math.max(
-      LAMBDA_MIN,
-      strengths.average *
-        (h.attack / strengths.average) *
-        (a.defence / strengths.average) *
-        homeAdvantage,
-    ),
-  )
-  const awayLambda = Math.min(
-    LAMBDA_MAX,
-    Math.max(
-      LAMBDA_MIN,
-      (strengths.average *
-        (a.attack / strengths.average) *
-        (h.defence / strengths.average)) /
-        homeAdvantage,
-    ),
-  )
-  let hg = poisson(homeLambda)
-  let ag = poisson(awayLambda)
+  const { homeLambda, awayLambda } = expectedGoals(home, away, strengths)
+  const hg = poisson(homeLambda)
+  const ag = poisson(awayLambda)
 
-  // A knockout tie proceeds through extra time; a remaining tie is resolved
-  // by a strength-weighted shoot-out. Shoot-out kicks are not counted as goals.
-  if (hg === ag) {
-    hg += poisson(homeLambda * EXTRA_TIME_SHARE)
-    ag += poisson(awayLambda * EXTRA_TIME_SHARE)
-  }
+  // HKSSF rule: a drawn knockout match goes straight to a penalty shoot-out
+  // (no extra time). The shoot-out winner is drawn with a mild tilt towards the
+  // stronger side; shoot-out kicks are not counted as goals.
   let winner: string
   if (hg !== ag) {
     winner = hg > ag ? home : away
   } else {
-    const homeChance = homeLambda / (homeLambda + awayLambda)
-    winner = Math.random() < homeChance ? home : away
+    winner = Math.random() < penaltyHomeChance(homeLambda, awayLambda, strengths.params.shootoutTilt) ? home : away
   }
   return { home, away, hg, ag, winner, loser: winner === home ? away : home }
 }

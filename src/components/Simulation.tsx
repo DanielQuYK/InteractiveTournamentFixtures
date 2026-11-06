@@ -4,6 +4,8 @@ import { SimulationCharts } from "./SimulationCharts"
 import { CommonBracket } from "./CommonBracket"
 import { AppliedResults } from "./AppliedResults"
 import { SimulationParameters } from "./SimulationParameters"
+import { usePersistentState } from "../lib/hooks"
+import { useModelSettings } from "../lib/useModelSettings"
 import { EmptyComparison } from "./shared"
 import { groupSeed } from "../lib/stats"
 import {
@@ -25,12 +27,17 @@ import {
 } from "../lib/simulation"
 
 /** Upper limit per run. Only compact aggregates are kept, so this affects time, not storage. */
-const MAX_SIMULATIONS = 1_000_000
+const MAX_SIMULATIONS = 10_000_000
 
 export function Simulation() {
-  const [count, setCount] = useState(1000)
+  const [count, setCount] = usePersistentState("sim-count", 1000)
   const stageOptions = useMemo(() => startStageOptions(), [])
-  const [startStage, setStartStage] = useState<StartStage>(latestStartStage)
+  const [storedStage, setStartStage] = usePersistentState<StartStage>("sim-stage", latestStartStage())
+  // A remembered stage is used only while it is still available.
+  const startStage = stageOptions.find((o) => o.stage === storedStage && o.enabled) ? storedStage : latestStartStage()
+  const settings = useModelSettings()
+  const [etaSeconds, setEtaSeconds] = useState<number | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [runs, setRuns] = useState<SimulationRun[]>([])
   const [activeId, setActiveId] = useState<number | null>(null)
   const [running, setRunning] = useState(false)
@@ -45,7 +52,10 @@ export function Simulation() {
     setCount(simulations)
     setRunning(true)
     setProgress(0)
+    setEtaSeconds(null)
+    setNotice(null)
     cancelled.current = false
+    const startedAt = performance.now()
     const teams = [...ALL_KO_TEAMS].sort()
     const aggregate = new Map<string, SimAggregate>(
       teams.map((team) => [team, emptyAggregate(team)]),
@@ -53,18 +63,27 @@ export function Simulation() {
     const brackets: BracketTally = new Map()
     const matchups: MatchupTally = new Map()
     // Rounds before the chosen stage use official results; ratings use only those.
-    const strengths = simulationStrengths(fixedMatchIds(startStage))
-    // Use approximately 100 equal visual steps regardless of run size. A fixed
-    // batch made small runs jump abruptly and large runs appear out of sync.
-    const batchSize = Math.max(1, Math.ceil(simulations / 100))
-    for (let i = 0; i < simulations; i += batchSize) {
-      const end = Math.min(simulations, i + batchSize)
-      for (let j = i; j < end; j++)
-        runOneSimulation(strengths, aggregate, brackets, matchups)
-      setProgress(end / simulations)
+    const strengths = simulationStrengths(fixedMatchIds(startStage), settings.params, settings.overrides)
+    // Work in slices of about 40 ms, then yield to the browser. Progress is always
+    // simulations done ÷ total, and the page stays responsive (and Stop works
+    // promptly) however large the run is.
+    let done = 0
+    while (done < simulations) {
+      const sliceEnds = performance.now() + 40
+      while (done < simulations && performance.now() < sliceEnds) {
+        // Check the clock every 64 runs rather than after every one.
+        for (let k = 0; k < 64 && done < simulations; k++) {
+          runOneSimulation(strengths, aggregate, brackets, matchups)
+          done++
+        }
+      }
+      setProgress(done / simulations)
+      const elapsed = (performance.now() - startedAt) / 1000
+      if (done > 0 && elapsed > 1) setEtaSeconds((elapsed / (done / simulations)) - elapsed)
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
       if (cancelled.current) {
         setRunning(false)
+        setNotice(`Stopped after ${done.toLocaleString()} of ${simulations.toLocaleString()} simulations. No results were saved.`)
         return
       }
     }
@@ -72,6 +91,7 @@ export function Simulation() {
       id: Date.now(),
       createdAt: new Date(),
       startStage,
+      customised: settings.customised,
       count: simulations,
       aggregates: [...aggregate.values()],
       brackets: [...brackets.values()],
@@ -80,6 +100,8 @@ export function Simulation() {
     setRuns((current) => [run, ...current].slice(0, 12))
     setActiveId(run.id)
     setRunning(false)
+    const seconds = (performance.now() - startedAt) / 1000
+    setNotice(`Finished ${simulations.toLocaleString()} simulations in ${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)} s.`)
   }
 
   const rows = useMemo(() => {
@@ -186,12 +208,6 @@ export function Simulation() {
             The latest stage is recommended because it uses every result entered so far. Starting earlier ignores
             those results, both when playing the bracket and when rating the teams.
           </p>
-          <div className="mt-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-500">
-              Results applied as already played
-            </p>
-            <AppliedResults stage={startStage} />
-          </div>
         </fieldset>
         <div className="flex flex-wrap items-end gap-4">
           <label className="block">
@@ -210,7 +226,7 @@ export function Simulation() {
             />
           </label>
           <div className="flex flex-wrap gap-2">
-            {[100, 1000, 10000, 100000, 1000000].map((n) => (
+            {[100, 1000, 10000, 100000, 1000000, 10000000].map((n) => (
               <button
                 key={n}
                 disabled={running}
@@ -247,7 +263,10 @@ export function Simulation() {
           <div className="mt-5">
             <div className="mb-1 flex justify-between text-xs text-stone-500">
               <span>Running tournament simulations…</span>
-              <span>{Math.round(progress * 100)}%</span>
+              <span>
+                {Math.round(progress * 100)}%
+                {etaSeconds !== null && ` · about ${etaSeconds < 90 ? `${Math.max(1, Math.round(etaSeconds))} s` : `${Math.round(etaSeconds / 60)} min`} left`}
+              </span>
             </div>
             <div
               className="h-2 overflow-hidden rounded-full bg-stone-100"
@@ -268,12 +287,19 @@ export function Simulation() {
           matches and finishing counts for 14 teams, plus compact counts of
           distinct brackets and scorelines—not individual simulated fixtures.
           Up to 12 run summaries are retained for this browser session. Runs
-          of up to 1,000,000 simulations are allowed; a million typically takes
-          around 15–30 seconds, depending on your device.
+          of up to 10,000,000 simulations are allowed; a million typically
+          takes around 15–30 seconds and ten million several minutes,
+          depending on your device. You can stop a run at any time.
         </p>
       </section>
 
-      <SimulationParameters stage={startStage} />
+      {notice && (
+        <p role="status" className="glass-surface mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
+          {notice}
+        </p>
+      )}
+
+      <SimulationParameters stage={startStage} settings={settings} />
 
       {!active ? (
         <EmptyComparison text="Choose the number of simulations and run the model to generate probabilities." />
@@ -290,7 +316,7 @@ export function Simulation() {
                 >
                   {runs.map((run) => (
                     <option key={run.id} value={run.id}>
-                      {run.count.toLocaleString()} simulations · from {run.startStage} ·{" "}
+                      {run.count.toLocaleString()} simulations · from {run.startStage}{run.customised ? " · custom settings" : ""} ·{" "}
                       {run.createdAt.toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -323,7 +349,10 @@ export function Simulation() {
           </div>
 
           <section className="glass-surface mb-5 rounded-xl border border-stone-200 bg-white p-4">
-            <h3 className="mb-2 font-semibold">Results applied in this run (from {active.startStage})</h3>
+            <h3 className="mb-2 font-semibold">
+              Results applied in this run (from {active.startStage})
+              {active.customised && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Custom model settings</span>}
+            </h3>
             <AppliedResults stage={active.startStage} />
           </section>
           <div
@@ -503,7 +532,7 @@ export function Simulation() {
           </section>
 
           <p className="mt-3 text-xs leading-relaxed text-stone-600">
-            Wins and losses include extra time and shoot-outs. Average win rate
+            Wins and losses include matches decided by penalty shoot-outs. Average win rate
             is the mean of each simulation’s wins ÷ matches, not total wins ÷
             total matches. Goal difference is GF − GA per simulation; shoot-out
             kicks are excluded. All metrics cover the complete knockout path,
@@ -544,9 +573,12 @@ export function Simulation() {
                 advantage, not one estimated from these results.
               </li>
               <li>
-                Draws proceed to simulated extra time and then a
-                strength-weighted shoot-out. Shoot-out kicks do not count as
-                goals.
+                HKSSF rules: matches are 35 minutes each half, and a drawn
+                knockout match goes straight to a penalty shoot-out with no
+                extra time. The shoot-out winner is chosen with a mild tilt
+                towards the stronger side, and shoot-out kicks do not count as
+                goals. Teams need at least 7 players to start or continue a
+                match; this has no effect on the model.
               </li>
               <li>
                 The starting stage decides which knockout results are treated as
@@ -558,11 +590,6 @@ export function Simulation() {
                 Knockout results connect different groups, so each counts 1.5
                 times as much as a group game when fitting attack and defence.
                 This weight is a judgement, not a fitted value.
-              </li>
-              <li>
-                A scoreline marked to be confirmed (currently HW v SKHTSK, 1–1,
-                5–4 on penalties to SKHTSK) is used exactly as entered until it
-                is checked; it is marked with an asterisk wherever it appears.
               </li>
               <li>
                 Finishing categories are mutually exclusive: Round of 14,
@@ -610,15 +637,15 @@ export function Simulation() {
               </div>
               <p>
                 Goals are drawn independently from Poisson distributions with
-                those expected goals. A drawn match adds extra-time goals using
-                λ ÷ 3. If still drawn, a shoot-out winner is sampled using λ
-                home ÷ (λ home + λ away) as the first-named team’s win chance.
+                those expected goals. A drawn match goes straight to a shoot-out
+                (no extra time), whose winner is sampled using λ home ÷ (λ home
+                + λ away) as the first-named team’s win chance.
                 All match winners then follow the real bracket, including byes
                 and the third-place play-off.
               </p>
               <p className="font-medium text-stone-800">
                 This is a heuristic scenario model, not a validated forecast.
-                Compression, shrinkage, home advantage, extra time and shoot-out
+                Compression, shrinkage, home advantage and shoot-out
                 assumptions are not fitted or calibrated to this competition.
                 More simulations reduce random sampling error, but cannot fix
                 missing cross-group evidence, uncertain team strength or

@@ -1,4 +1,5 @@
 import { usePersistentState } from './lib/hooks'
+import { BackToTop } from './components/BackToTop'
 import { useEffect, useState } from 'react'
 import { type Detail, type Tab } from './components/shared'
 import { GroupStage } from './components/GroupStage'
@@ -66,6 +67,8 @@ export default function App() {
           complete fixtures. Per-player statistics are not published, as insufficient data is available.
         </p>
       </main>
+
+      <BackToTop />
 
       {detail && (
         <MatchModal

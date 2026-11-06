@@ -5,7 +5,7 @@
  *   R1–R6  Round of 14      Q1–Q4  Quarter-finals
  *   S1–S2  Semi-finals      TP     Third-place play-off     F  Final
  *
- * `score` is [home, away] after normal and extra time. If the score is level,
+ * `score` is [home, away] at full time (35 minutes each half; there is no extra time). If the score is level,
  * add `pens: [home, away]` for the shoot-out. Example:
  *
  *   R1: { score: [2, 1] },
@@ -29,8 +29,6 @@ export const KO_RESULTS: Record<string, KoResult> = {
   R2: { score: [3, 0] }, // KCC 3–0 LHYMSS
   R3: { score: [0, 2] }, // SJA 0–2 ISS
   R4: { score: [2, 3] }, // KWSC 2–3 CFSS
-  // HW v SKHTSK: 1–1, SKHTSK won 5–4 on penalties. scoreTbc shows an asterisk and a remark
-  // everywhere this score appears; delete `scoreTbc` once the score is double-checked.
-  R5: { score: [1, 1], pens: [4, 5], scoreTbc: true },
+  R5: { score: [1, 1], pens: [4, 5] }, // HW 1–1 SKHTSK; SKHTSK won 5–4 on penalties
   R6: { score: [4, 1] }, // HKUGA 4–1 SPCC
 }

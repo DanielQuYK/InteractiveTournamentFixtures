@@ -209,8 +209,7 @@ export function CommonBracket({ run }: { run: SimulationRun }) {
           <span className="rounded bg-rose-100 px-1.5 py-0.5 font-semibold text-rose-700">-1.0</span> losing side’s average margin
         </span>
         <span>
-          Averages cover the {selected.count.toLocaleString()} runs that produced exactly this bracket; extra time counts and
-          shoot-out wins count as 0.0. “In xx% of runs” is how often that team won that match across every run.
+          Averages cover the {selected.count.toLocaleString()} runs that produced exactly this bracket; a win on penalties counts as 0.0. “In xx% of runs” is how often that team won that match across every run.
         </span>
       </div>
     </section>
@@ -300,15 +299,20 @@ function SimulatedMatchCard({ id, teams, winner, margin, share, official, onOpen
           </div>
         )
       })}
-      <div className="flex items-center justify-between gap-2 px-3 py-1 text-[11px] leading-tight text-stone-600">
-        <span className="truncate">{VENUE_SHORT[match.venue]}</span>
-        <span className="shrink-0 whitespace-nowrap">
+      <div className="flex items-center justify-between gap-3 px-3 py-1 text-[11px] leading-tight text-stone-600">
+        {/* The venue may wrap to a second row; it is never cut off. */}
+        <span className="min-w-0 flex-1">{VENUE_SHORT[match.venue]}</span>
+        <span className="shrink-0 whitespace-nowrap text-right">
           {official ? (
             <span className="font-semibold text-emerald-800">
-              Official result{match.scoreTbc ? "*" : ""} · every run
+              <span className="block">Official</span>
+              <span className="block">result{match.scoreTbc ? "*" : ""}</span>
             </span>
           ) : (
-            <>{winner} won in {share.toFixed(1)}% of runs</>
+            <>
+              <span className="block">{winner} won in</span>
+              <span className="block">{share.toFixed(1)}% of runs</span>
+            </>
           )}
         </span>
       </div>

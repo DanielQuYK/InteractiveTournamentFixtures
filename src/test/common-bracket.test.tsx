@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { CommonBracket } from "../components/CommonBracket"
 import { MatchupScorelines } from "../components/MatchupScorelines"
 import { ALL_KO_TEAMS } from "../lib/data"
+import { bracketSide } from "../lib/bracketLayout"
 import {
   emptyAggregate,
   runOneSimulation,
@@ -78,21 +79,39 @@ describe("matchup scorelines", () => {
     }
   })
 
-  it("shows the most common scoreline for a fixed pairing", () => {
+  it("keeps a same-half pairing simple: scoreline and its probability only", () => {
     const run = makeRun(300)
     const html = renderToStaticMarkup(
-      <MatchupScorelines
-        run={run}
-        matchId="R1"
-        home="IKTMC"
-        away="QC"
-        onClose={() => {}}
-      />,
+      <MatchupScorelines run={run} matchId="R1" home="IKTMC" away="QC" onClose={() => {}} />,
     )
+    expect(bracketSide("IKTMC")).toBe(bracketSide("QC"))
     expect(html).toContain("Most common scoreline")
-    expect(html).toContain("300")
-    expect(html).toContain("Who won")
+    expect(html).toContain("of 300")
+    expect(html).not.toContain("Who won")
+    expect(html).not.toContain("met in")
+    expect(html).not.toContain("Only ever met")
+    expect(html).not.toContain("more than one stage")
     expect(html).not.toContain("NaN")
+  })
+
+  it("shows only the actual fixture for a match played before the simulation starts", () => {
+    const run = { ...makeRun(300), startStage: "QF" as const }
+    const html = renderToStaticMarkup(
+      <MatchupScorelines run={run} matchId="R6" home="HKUGA" away="SPCC" onClose={() => {}} />,
+    )
+    expect(html).toContain("Official result")
+    expect(html).toContain("HKUGA")
+    expect(html).toContain(">4<")
+    expect(html).not.toContain("Most common scoreline")
+    expect(html).not.toContain("meetings")
+    expect(html).not.toContain("Who won")
+    expect(html).not.toContain("95% CI")
+    // The same fixture is an ordinary simulated match when the run starts in the Round of 14.
+    const simulated = renderToStaticMarkup(
+      <MatchupScorelines run={{ ...run, startStage: "R14" }} matchId="R6" home="HKUGA" away="SPCC" onClose={() => {}} />,
+    )
+    expect(simulated).toContain("Most common scoreline")
+    expect(simulated).not.toContain("Official result")
   })
 
   it("explains a pairing that can meet at more than one stage", () => {
@@ -110,5 +129,7 @@ describe("matchup scorelines", () => {
     )
     expect(html).toContain("more than one stage")
     expect(html).toContain("All stages")
+    expect(html).toContain("Who won")
+    expect(bracketSide(multi!.teams[0])).not.toBe(bracketSide(multi!.teams[1]))
   })
 })

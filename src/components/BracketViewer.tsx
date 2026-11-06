@@ -48,18 +48,63 @@ export function useBracketZoom(storageKey: string) {
         ? Math.min(1.35, Math.max(fit, 0.85))
         : Math.min(fit, focus.kind === "match" ? 1.7 : 1.25)
 
-  useEffect(() => {
+  // The canvas size, its scale and the scroll position are driven together,
+  // imperatively, so every frame of a zoom is internally consistent. (Animating
+  // the CSS scale and the scroll position independently made the view drift,
+  // because the scrollable area was still changing size while it scrolled.)
+  const sizerRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const applied = useRef(0)
+  const frame = useRef(0)
+  const lastFocus = useRef("")
+
+  useLayoutEffect(() => {
     const el = vp.current
-    if (!el) return
-    const left = (rect.x + rect.w / 2) * scale - size.w / 2
-    const top = rect.h * scale > size.h ? rect.y * scale : (rect.y + rect.h / 2) * scale - size.h / 2
-    el.scrollTo({
-      left: Math.max(0, left),
-      top: Math.max(0, top),
-      behavior: reducedMotion ? "auto" : "smooth",
-    })
+    const sizer = sizerRef.current
+    const canvas = canvasRef.current
+    if (!el || !sizer || !canvas) return
+    const render = (s: number, cx: number, cy: number) => {
+      canvas.style.transform = `scale(${s})`
+      sizer.style.width = `${TOTAL_W * s}px`
+      sizer.style.height = `${TOTAL_H * s}px`
+      el.scrollLeft = cx * s - el.clientWidth / 2
+      el.scrollTop = cy * s - el.clientHeight / 2
+      applied.current = s
+    }
+    const tall = rect.h * scale > size.h
+    const target = {
+      s: scale,
+      cx: rect.x + rect.w / 2,
+      cy: tall ? rect.y + size.h / (2 * scale) : rect.y + rect.h / 2,
+    }
+    cancelAnimationFrame(frame.current)
+    const focusKey = JSON.stringify(focus)
+    const focusChanged = focusKey !== lastFocus.current
+    lastFocus.current = focusKey
+    const from = applied.current
+    if (!from || !focusChanged || reducedMotion) {
+      render(target.s, target.cx, target.cy)
+      return
+    }
+    // Animate scale (geometrically, so zooming feels even) and the viewed centre together.
+    const startCx = (el.scrollLeft + el.clientWidth / 2) / from
+    const startCy = (el.scrollTop + el.clientHeight / 2) / from
+    const started = performance.now()
+    const duration = 380
+    const step = (now: number) => {
+      const t = Math.min(1, (now - started) / duration)
+      const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+      render(
+        from * Math.pow(target.s / from, e),
+        startCx + (target.cx - startCx) * e,
+        startCy + (target.cy - startCy) * e,
+      )
+      if (t < 1) frame.current = requestAnimationFrame(step)
+    }
+    frame.current = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(frame.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focus, scale, size.w, size.h])
+  }, [focus, scale, size.w, size.h, reducedMotion])
 
   const go = (f: Focus) => {
     if (f.kind === "phase") setLastRound(f.round)
@@ -83,17 +128,46 @@ export function useBracketZoom(storageKey: string) {
   useEffect(() => {
     const el = vp.current
     if (!el) return
-    let last = 0
+    // Mac trackpad pinch arrives as a burst of small ctrl+wheel events, so add
+    // them up and take one zoom step per deliberate gesture.
+    let total = 0
+    let lastEvent = 0
+    let lastStep = 0
     const wheel = (e: WheelEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return
       e.preventDefault()
       const now = Date.now()
-      if (now - last < 450) return
-      last = now
-      e.deltaY < 0 ? zoomRef.current.zoomIn() : zoomRef.current.zoomOut()
+      if (now - lastEvent > 250) total = 0
+      lastEvent = now
+      total += e.deltaY
+      if (now - lastStep < 400 || Math.abs(total) < 40) return
+      lastStep = now
+      if (total < 0) zoomRef.current.zoomIn()
+      else zoomRef.current.zoomOut()
+      total = 0
+    }
+    // Safari reports pinch as gesture events instead.
+    let stepped = false
+    const gestureStart = (e: Event) => {
+      e.preventDefault()
+      stepped = false
+    }
+    const gestureChange = (e: Event) => {
+      e.preventDefault()
+      const scaleChange = (e as unknown as { scale: number }).scale
+      if (stepped || (scaleChange < 1.25 && scaleChange > 0.8)) return
+      stepped = true
+      if (scaleChange > 1) zoomRef.current.zoomIn()
+      else zoomRef.current.zoomOut()
     }
     el.addEventListener("wheel", wheel, { passive: false })
-    return () => el.removeEventListener("wheel", wheel)
+    el.addEventListener("gesturestart", gestureStart)
+    el.addEventListener("gesturechange", gestureChange)
+    return () => {
+      el.removeEventListener("wheel", wheel)
+      el.removeEventListener("gesturestart", gestureStart)
+      el.removeEventListener("gesturechange", gestureChange)
+    }
   }, [])
 
   return {
@@ -106,6 +180,8 @@ export function useBracketZoom(storageKey: string) {
     scale,
     fullScale,
     vp,
+    sizerRef,
+    canvasRef,
     reducedMotion,
   }
 }
@@ -169,29 +245,16 @@ export function BracketToolbar({ zoom }: { zoom: BracketZoom }) {
 
 /** The scrollable, zoomable canvas. Children are positioned in bracket coordinates. */
 export function BracketViewport({ zoom, children }: { zoom: BracketZoom; children: ReactNode }) {
-  const { focus, scale, vp, reducedMotion } = zoom
+  const { focus, scale, vp, sizerRef, canvasRef } = zoom
   return (
     <div
       ref={vp}
       className="relative overflow-auto rounded-xl border border-stone-200 bg-white"
       style={{ height: focus.kind === "all" ? TOTAL_H * scale : "min(72vh, 700px)" }}
     >
-      <div
-        style={{
-          width: TOTAL_W * scale,
-          height: TOTAL_H * scale,
-          transition: reducedMotion ? "none" : "width .5s, height .5s",
-        }}
-      >
-        <div
-          className="relative origin-top-left"
-          style={{
-            width: TOTAL_W,
-            height: TOTAL_H,
-            transform: `scale(${scale})`,
-            transition: reducedMotion ? "none" : "transform .6s cubic-bezier(.22,.8,.3,1)",
-          }}
-        >
+      {/* Width, height and scale of the two layers below are set by the zoom engine. */}
+      <div ref={sizerRef}>
+        <div ref={canvasRef} className="relative origin-top-left" style={{ width: TOTAL_W, height: TOTAL_H }}>
           {PHASES.map((p, c) => (
             <div
               key={p.round}

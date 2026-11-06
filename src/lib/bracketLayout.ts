@@ -162,3 +162,15 @@ export const focusLabel = (f: Focus) =>
         ? `${TAG[f.id]} (match view)`
         : `${TAG[f.id]} (match path)`
 
+
+const UPPER_HALF = new Set(['R1', 'R2', 'R3', 'Q1', 'Q2'])
+
+/** Which half of the bracket a team starts in; teams in the same half can only meet once. */
+export function bracketSide(team: string): 'upper' | 'lower' {
+  const entry = KO_MATCHES.find(
+    (m) =>
+      (m.home.kind === 'team' && m.home.team === team) ||
+      (m.away.kind === 'team' && m.away.team === team),
+  )
+  return entry && UPPER_HALF.has(entry.id) ? 'upper' : 'lower'
+}

@@ -237,7 +237,7 @@ export const KO_MATCHES: KoMatch[] = [
   { id: 'Q1', label: 'Quarter-final 1', round: 'QF', date: '2026-11-07', time: '1:30 PM', venue: 'HV', home: T('SKHLMC', '1st, Group 2 – bye'), away: W('R1') },
   { id: 'Q2', label: 'Quarter-final 2', round: 'QF', date: '2026-11-07', time: '2:45 PM', venue: 'HV', home: W('R2'), away: W('R3') },
   { id: 'Q3', label: 'Quarter-final 3', round: 'QF', date: '2026-11-08', time: '9:30 AM', venue: 'HV', home: W('R4'), away: W('R5') },
-  { id: 'Q4', label: 'Quarter-final 4', round: 'QF', date: '2026-11-08', time: '10:45 AM', venue: 'HV', home: W('R6'), away: T('CANADIAN', '1st, Group 5 – bye') },
+  { id: 'Q4', label: 'Quarter-final 4', round: 'QF', date: '2026-11-10', time: '3:00 PM', venue: 'HV', home: W('R6'), away: T('CANADIAN', '1st, Group 5 – bye') },
   { id: 'S1', label: 'Semi-final 1', round: 'SF', date: '2026-11-18', time: '3:00 PM', venue: 'AB', home: W('Q1'), away: W('Q2') },
   { id: 'S2', label: 'Semi-final 2', round: 'SF', date: '2026-11-18', time: '3:00 PM', venue: 'SKP', home: W('Q3'), away: W('Q4') },
   { id: 'TP', label: 'Third-place play-off', round: 'TP', date: '2026-12-02', time: '3:00 PM', venue: 'AB', home: L('S1'), away: L('S2') },
