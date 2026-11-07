@@ -1,4 +1,4 @@
-import { koById, koPlayed, slotTeam } from './data'
+import { koById, koPlayed, koWinner, slotTeam } from './data'
 import { expectedGoals, penaltyHomeChance, simulationStrengths } from './simulation'
 
 type Strengths = ReturnType<typeof simulationStrengths>
@@ -21,6 +21,8 @@ export interface FullTimePrediction {
   away: number
   /** Chance the first-named side eventually wins, shoot-out included. */
   homeAdvances: number
+  /** Chance the first-named side wins a shoot-out, given the match is level at full time. */
+  penaltyHome: number
   /** grid[homeGoals][awayGoals] for 0..GRID_SIZE goals. */
   grid: number[][]
 }
@@ -48,20 +50,41 @@ export function pairPrediction(home: string, away: string, strengths: Strengths)
     draw,
     away: awayWin,
     homeAdvances: homeWin + draw * penaltyHomeChance(homeLambda, awayLambda, strengths.params.shootoutTilt),
+    penaltyHome: penaltyHomeChance(homeLambda, awayLambda, strengths.params.shootoutTilt),
     grid,
   }
 }
 
 /**
  * Full-time win/draw/win probabilities and result grid for a fixture whose two teams are both
- * confirmed and which has not been played. Returns null otherwise: with an undecided side there
- * is no single pairing to describe, so no probability is offered.
+ * confirmed. Returns null otherwise: with an undecided side there is no single pairing to describe,
+ * so no probability is offered. For a match already played, pass ratings built only from
+ * information available before kick-off (see `strengthsBefore`).
  */
 export function predictFixture(id: string, strengths: Strengths = simulationStrengths()): FullTimePrediction | null {
   const match = koById(id)
-  if (koPlayed(match)) return null
   const home = slotTeam(match.home)
   const away = slotTeam(match.away)
   if (!home || !away) return null
   return pairPrediction(home, away, strengths)
+}
+
+export interface ActualResult {
+  /** Which full-time outcome happened; a level score is a draw even though penalties settled it. */
+  side: 'home' | 'draw' | 'away'
+  score: [number, number] | null
+  winner: string
+  pens: [number, number] | null
+}
+
+/** What actually happened in a played knockout match, or null if it has not been played. */
+export function actualResult(id: string): ActualResult | null {
+  const match = koById(id)
+  const winner = koWinner(match)
+  if (!koPlayed(match) || !winner) return null
+  const home = slotTeam(match.home)
+  const side = match.score
+    ? match.score[0] > match.score[1] ? 'home' : match.score[0] < match.score[1] ? 'away' : 'draw'
+    : winner === home ? 'home' : 'away'
+  return { side, score: match.score ?? null, winner, pens: match.pens ?? null }
 }

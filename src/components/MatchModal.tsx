@@ -167,7 +167,7 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
           </div>
         )}
         {/* Only offered once both teams are confirmed: otherwise there is no single pairing to describe. */}
-        {detail.kind === 'ko' && !koPlayed(koById(detail.id)) && home && away && <PredictionToggle matchId={detail.id} />}
+        {detail.kind === 'ko' && home && away && <PredictionToggle matchId={detail.id} />}
       </div>
     </div>
   )

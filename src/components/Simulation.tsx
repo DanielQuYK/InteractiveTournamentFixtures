@@ -92,6 +92,8 @@ export function Simulation() {
       createdAt: new Date(),
       startStage,
       customised: settings.customised,
+      params: settings.params,
+      overrides: settings.overrides,
       count: simulations,
       aggregates: [...aggregate.values()],
       brackets: [...brackets.values()],

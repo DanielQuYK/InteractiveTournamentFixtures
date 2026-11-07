@@ -22,18 +22,19 @@ const noop = () => {}
 
 describe("full-time probabilities", () => {
   it("sums to one and describes a confirmed pairing", () => {
-    const p = predictFixture("Q1")!
+    const p = predictFixture("Q2")!
     expect(p.home + p.draw + p.away).toBeCloseTo(1, 6)
     expect(p.draw).toBeGreaterThan(0)
     expect(p.grid.flat().reduce((a: number, b: number) => a + b, 0)).toBeLessThanOrEqual(1)
     expect(p.homeAdvances).toBeGreaterThan(p.home)
     expect(p.homeAdvances).toBeLessThan(p.home + p.draw + 1e-9)
   })
-  it("offers no probability unless both teams are confirmed or the match is unplayed", () => {
+  it("offers no probability unless both teams are confirmed", () => {
     expect(predictFixture("S1")).toBeNull()
     expect(predictFixture("F")).toBeNull()
     expect(predictFixture("TP")).toBeNull()
-    expect(predictFixture("R1")).toBeNull()
+    expect(predictFixture("R1")).not.toBeNull()
+    expect(predictFixture("Q1")).not.toBeNull()
   })
   it("favours the stronger side", () => {
     const strengths = simulationStrengths()
@@ -45,11 +46,11 @@ describe("full-time probabilities", () => {
 describe("HKSSF rules: no extra time", () => {
   it("sends every full-time draw straight to penalties, so draws are not reduced", () => {
     const strengths = simulationStrengths(fixedMatchIds("QF"))
-    const expected = pairPrediction("SKHLMC", "IKTMC", strengths).draw
+    const expected = pairPrediction("KCC", "ISS", strengths).draw
     let draws = 0
     const n = 20000
     for (let i = 0; i < n; i++) {
-      const r = simulateMatch("Q1", "SKHLMC", "IKTMC", strengths)
+      const r = simulateMatch("Q2", "KCC", "ISS", strengths)
       if (r.hg === r.ag) draws++
     }
     expect(Math.abs(draws / n - expected)).toBeLessThan(0.02)
@@ -60,7 +61,7 @@ describe("probability displays", () => {
   it("offers the collapsed probability bar only for fixtures that have not been played", () => {
     const upcoming = renderToStaticMarkup(
       <MatchModal
-        detail={{ kind: "ko", id: "Q1" }}
+        detail={{ kind: "ko", id: "Q2" }}
         onClose={noop}
         onTeam={noop}
       />,
@@ -75,7 +76,7 @@ describe("probability displays", () => {
         onTeam={noop}
       />,
     )
-    expect(played).not.toContain("Win and result probability")
+    expect(played).toContain("Win and result probability")
   })
   it("draws the win bar in green, grey and red", () => {
     const html = renderToStaticMarkup(
@@ -138,6 +139,8 @@ describe("probability displays", () => {
     expect(html.match(/role="cell"/g)).toHaveLength(36)
     expect(html).toContain("Draw (Penalties)")
     expect(html).toContain("Goals (IKTMC)")
+    expect(html).toContain("Penalty shoot-out win probability")
+    expect(html).not.toContain("ring-amber-400")
     expect(html).not.toContain("NaN")
   })
 })

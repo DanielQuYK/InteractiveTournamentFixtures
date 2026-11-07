@@ -3,7 +3,10 @@ import { VENUES, fmtDate, koById, koWinner, slotTeam } from "../lib/data"
 import { bracketSide } from "../lib/bracketLayout"
 import { TBC_REMARK } from "../lib/matchText"
 import { GRID_SIZE } from "../lib/prediction"
-import { ResultGrid, WinProbabilityBar } from "./MatchPredictionPanel"
+import { actualResult, pairPrediction, predictFixture } from "../lib/prediction"
+import { DEFAULT_PARAMS } from "../lib/modelParams"
+import { playedBefore, strengthsBefore } from "../lib/simulation"
+import { PredictionBody, ResultGrid, ShootoutBar, WinProbabilityBar } from "./MatchPredictionPanel"
 import { useDialog } from "../lib/hooks"
 import { groupSeed } from "../lib/stats"
 import {
@@ -178,7 +181,7 @@ export function MatchupScorelines({
         </div>
 
         {official ? (
-          <OfficialBody matchId={matchId} />
+          <OfficialBody matchId={matchId} run={run} />
         ) : !record || !summary ? (
           <p className="px-6 pb-6 text-sm text-stone-600">
             No simulated meetings of these teams were recorded.
@@ -251,6 +254,28 @@ export function MatchupScorelines({
                   home={fullTime.home / summary.meetings}
                   draw={fullTime.draw / summary.meetings}
                   away={fullTime.away / summary.meetings}
+                />
+              </section>
+            )}
+
+            {summary && (
+              <section>
+                <h5 className="mb-1 text-center text-xs font-semibold uppercase tracking-wide text-stone-600">
+                  Penalty shoot-out win probability
+                </h5>
+                <p className="mb-2 text-center text-xs text-stone-600">
+                  If this match is level after 70 minutes it goes straight to penalties. Estimated from the ratings available before this match
+                  day; it has not been played in this simulation, so nothing is highlighted.
+                </p>
+                <ShootoutBar
+                  homeLabel={home}
+                  awayLabel={away}
+                  prediction={pairPrediction(
+                    home,
+                    away,
+                    strengthsBefore(matchId, run.params ?? DEFAULT_PARAMS, run.overrides ?? {}, fixedMatchIds(run.startStage)),
+                  )}
+                  actual={null}
                 />
               </section>
             )}
@@ -381,7 +406,7 @@ export function MatchupScorelines({
 }
 
 /** A match played before the simulation starts: just the actual fixture, with no probabilities. */
-function OfficialBody({ matchId }: { matchId: string }) {
+function OfficialBody({ matchId, run }: { matchId: string; run: SimulationRun }) {
   const m = koById(matchId)
   const winner = koWinner(m)
   const star = m.scoreTbc ? "*" : ""
@@ -415,6 +440,34 @@ function OfficialBody({ matchId }: { matchId: string }) {
         })}
       </div>
       {m.scoreTbc && <p className="text-xs font-medium text-amber-800">{TBC_REMARK}</p>}
+      <OfficialPrediction matchId={matchId} run={run} />
+    </div>
+  )
+}
+
+/**
+ * Win and result probability for a match played in this simulation's world, using only what was
+ * known before it kicked off: group results plus applied knockout results with an earlier kick-off.
+ */
+function OfficialPrediction({ matchId, run }: { matchId: string; run: SimulationRun }) {
+  const m = koById(matchId)
+  const home = slotTeam(m.home)
+  const away = slotTeam(m.away)
+  const world = fixedMatchIds(run.startStage)
+  const prediction = home && away
+    ? predictFixture(matchId, strengthsBefore(matchId, run.params ?? DEFAULT_PARAMS, run.overrides ?? {}, world))
+    : null
+  if (!prediction || !home || !away) return null
+  return (
+    <div className="border-t border-stone-200 pt-4">
+      <PredictionBody
+        homeLabel={home}
+        awayLabel={away}
+        prediction={prediction}
+        actual={actualResult(matchId)}
+        knockoutResultsUsed={playedBefore(matchId, world).size}
+        customised={run.customised}
+      />
     </div>
   )
 }

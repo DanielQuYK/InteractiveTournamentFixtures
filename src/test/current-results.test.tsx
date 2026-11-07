@@ -42,6 +42,13 @@ describe("Round of 14 results", () => {
       ["SKHLMC", "IKTMC"], ["KCC", "ISS"], ["CFSS", "SKHTSK"], ["HKUGA", "CANADIAN"],
     ])
   })
+  it("records IKTMC's reported quarter-final win as awaiting confirmation", () => {
+    const q1 = koById("Q1")
+    expect(q1.score).toEqual([0, 2])
+    expect(q1.scoreTbc).toBe(true)
+    expect(koWinner(q1)).toBe("IKTMC")
+    expect(slotTeam(koById("S1").home)).toBe("IKTMC")
+  })
   it("records the confirmed HW v SKHTSK scoreline with its penalties", () => {
     const r5 = koById("R5")
     expect(r5.score).toEqual([1, 1])
@@ -62,7 +69,9 @@ describe("Round of 14 results", () => {
     }
     expect(knockoutTeamState("QC").target.id).toBe("R1")
     expect(knockoutTeamState("HW").target.id).toBe("R5")
-    for (const [team, next] of [["IKTMC", "Q1"], ["SKHTSK", "Q3"], ["CANADIAN", "Q4"]]) {
+    expect(knockoutTeamState("SKHLMC").eliminated).toBe(true)
+    expect(knockoutTeamState("SKHLMC").target.id).toBe("Q1")
+    for (const [team, next] of [["IKTMC", "S1"], ["SKHTSK", "Q3"], ["CANADIAN", "Q4"]]) {
       const state = knockoutTeamState(team)
       expect(state.eliminated).toBe(false)
       expect(state.target.id).toBe(next)
@@ -77,13 +86,15 @@ describe("starting stage", () => {
     expect(options.find((o) => o.recommended)?.stage).toBe("QF")
     expect(latestStartStage()).toBe("QF")
     expect(fixedMatchIds("R14").size).toBe(0)
-    expect([...fixedMatchIds("QF")].sort()).toEqual(["R1", "R2", "R3", "R4", "R5", "R6"])
+    expect([...fixedMatchIds("QF")].sort()).toEqual(["Q1", "R1", "R2", "R3", "R4", "R5", "R6"])
   })
   it("fixes the official Round of 14 when starting from the quarter-finals", () => {
     const totals = simulate("QF", 100)
     expect(totals.get("QC")!.finishes.r14).toBe(100)
     expect(totals.get("HW")!.finishes.r14).toBe(100)
     expect(totals.get("IKTMC")!.finishes.r14).toBe(0)
+    expect(totals.get("SKHLMC")!.finishes.qf).toBe(100)
+    expect(totals.get("IKTMC")!.finishes.qf).toBe(0)
     expect(KO_MATCHES.length).toBe(14)
   })
   it("pretends nothing happened when starting from the Round of 14", () => {
@@ -99,15 +110,17 @@ describe("starting stage", () => {
 })
 
 describe("two possible teams on both sides", () => {
-  it("shows both candidates on each side of a semi-final", () => {
+  it("shows the confirmed team and the two remaining candidates in Semi-final 1", () => {
     const html = renderToStaticMarkup(<MatchModal detail={{ kind: "ko", id: "S1" }} onClose={noop} onTeam={noop} />)
-    for (const team of ["SKHLMC", "IKTMC", "KCC", "ISS"]) expect(html).toContain(team)
-    expect(html).toContain("Quarter-final 1")
+    for (const team of ["IKTMC", "KCC", "ISS"]) expect(html).toContain(team)
+    expect(html).toContain("Beat SKHLMC 2–0*")
     expect(html).toContain("Quarter-final 2")
   })
   it("keeps the final and third-place match generic until both feeder matches have teams", () => {
     const html = renderToStaticMarkup(<MatchModal detail={{ kind: "ko", id: "F" }} onClose={noop} onTeam={noop} />)
-    expect(html).not.toContain("IKTMC")
+    expect(html).toContain("Winner of Semi-final 1")
+    expect(html).toContain("Winner of Semi-final 2")
+    expect(html).not.toContain("Win and result probability")
   })
   it("shows an eliminated team's status and confirmed result", () => {
     const hw = renderToStaticMarkup(<TeamPanel team="HW" onClose={noop} onTeam={noop} />)
@@ -169,8 +182,9 @@ describe("simulation panels", () => {
     expect(html).toContain("bg-rose-100")
     expect(html).toContain(">1<")
     expect(html).toContain("(5)")
-    expect(html).not.toContain("Score to be confirmed")
-    expect(html).not.toContain("TBC")
+    expect(html).toContain("Score to be confirmed")
+    expect(html).toContain("0*")
+    expect(html).toContain("2*")
     expect(renderToStaticMarkup(<AppliedResults stage="R14" />)).toContain("No official results are applied")
   })
   it("states which data the ratings use for the chosen starting stage", () => {
@@ -178,7 +192,7 @@ describe("simulation panels", () => {
     expect(fromR14).toContain("group-stage matches only")
     expect(fromR14).toContain("not used from this stage")
     const fromQf = renderToStaticMarkup(<Parameters stage="QF" />)
-    expect(fromQf).toContain("plus 6 official knockout result")
+    expect(fromQf).toContain("plus 7 official knockout result")
   })
   it("lists model parameters and per-team reasons, with editing off until switched on", () => {
     const html = renderToStaticMarkup(<Parameters stage="QF" />)

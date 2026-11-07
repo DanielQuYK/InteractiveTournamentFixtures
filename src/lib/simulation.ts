@@ -6,6 +6,7 @@ import {
   koById,
   koWinner,
   slotTeam,
+  type KoMatch,
   type Slot,
 } from "./data"
 
@@ -126,11 +127,16 @@ const STAGE_LABEL: Record<StartStage, string> = {
   F: "Final and third place",
 }
 
-/** Match ids from rounds before `stage` that have a confirmed winner. */
+/**
+ * Confirmed results available when a run begins at `stage`.
+ * Round of 14 means a completely hypothetical tournament. Later starts include
+ * all completed earlier matches and any completed matches within that stage.
+ */
 export function fixedMatchIds(stage: StartStage): Set<string> {
   const cut = STAGE_ORDER.indexOf(stage)
+  if (cut === 0) return new Set()
   return new Set(
-    KO_MATCHES.filter((m) => ROUND_INDEX[m.round] < cut && koPlayed(m)).map((m) => m.id),
+    KO_MATCHES.filter((m) => ROUND_INDEX[m.round] <= cut && koPlayed(m)).map((m) => m.id),
   )
 }
 
@@ -138,6 +144,7 @@ export function startStageOptions(): StartStageOption[] {
   const options = STAGE_ORDER.map((stage, cut) => {
     const earlier = KO_MATCHES.filter((m) => ROUND_INDEX[m.round] < cut)
     const enabled = earlier.every((m) => koPlayed(m))
+    const fixed = fixedMatchIds(stage)
     return {
       stage,
       label: `From the ${STAGE_LABEL[stage]}`,
@@ -145,11 +152,11 @@ export function startStageOptions(): StartStageOption[] {
         cut === 0
           ? "Pretend no knockout match has been played; every match is simulated."
           : enabled
-            ? `Uses the ${earlier.length} completed earlier results as fixed and simulates the rest.`
+            ? `Uses ${fixed.size} completed results available at this stage as fixed and simulates the rest.`
             : "Unavailable until every earlier match has a confirmed winner.",
       enabled,
       recommended: false,
-      fixedMatches: earlier.length,
+      fixedMatches: fixed.size,
     }
   })
   const latest = [...options].reverse().find((o) => o.enabled)
@@ -168,6 +175,29 @@ export function officialScore(m: (typeof KO_MATCHES)[number]): [number, number] 
   return null
 }
 
+/**
+ * Knockout results that existed before the day `id` was played: played matches on a strictly earlier
+ * date. Results from the same day, even hours earlier, are excluded, so a match is never informed by
+ * anything that happened on its own matchday. Pass `within` to limit this to results that count as
+ * played in a given world (for example a simulation's applied results).
+ */
+export function playedBefore(id: string, within?: ReadonlySet<string>): Set<string> {
+  const day = koById(id).date
+  return new Set(
+    KO_MATCHES.filter((m) => koPlayed(m) && m.date < day && (!within || within.has(m.id))).map((m) => m.id),
+  )
+}
+
+/** Team ratings built only from information available before the match day: group games plus knockout results from earlier days. */
+export function strengthsBefore(
+  id: string,
+  settings: ModelParams = DEFAULT_PARAMS,
+  overrides: RatingOverrides = {},
+  within?: ReadonlySet<string>,
+) {
+  return simulationStrengths(playedBefore(id, within), settings, overrides)
+}
+
 export interface SimulationRun {
   id: number
   createdAt: Date
@@ -180,6 +210,9 @@ export interface SimulationRun {
   startStage: StartStage
   /** True when the run used edited model parameters or team ratings. */
   customised?: boolean
+  /** The model settings the run used, so match details can be re-derived faithfully. */
+  params?: ModelParams
+  overrides?: RatingOverrides
 }
 
 export interface SimMatchResult {
