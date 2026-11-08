@@ -64,9 +64,11 @@ describe('full ranking', () => {
   it('separates teams out at the same stage by points, then goal difference (per game when games differ)', () => {
     setActiveDivision('d3h')
     const block = leaderboard('full').rows.filter((r) => r.tier === 'Out in the round of 14')
+    const share = (r: (typeof block)[number]) => r.groupPos / r.groupSize
     for (let i = 1; i < block.length; i++) {
       const a = block[i - 1], b = block[i]
-      expect(a.ppg! > b.ppg! || (a.ppg === b.ppg && a.gdpg! >= b.gdpg!)).toBe(true)
+      if (share(a) !== share(b)) expect(share(a)).toBeLessThan(share(b))
+      else expect(a.ppg! > b.ppg! || (a.ppg === b.ppg && a.gdpg! >= b.gdpg!)).toBe(true)
     }
     expect(block[0].rank).toBe('9')
     expect(block.every((r) => r.basis === 'per game')).toBe(true)
@@ -136,5 +138,20 @@ describe('competitions without a knockout yet', () => {
     setActiveDivision('k2')
     const r = leaderboard('full').rows.find((x) => x.team === 'RSEFHKMC')!
     expect(r.withdrawn).toBe(true)
+  })
+})
+
+describe('teams that missed the knockout in unequal groups (Division Three HK)', () => {
+  it('does not rank the last team of a small group above mid-table teams from bigger groups', () => {
+    setActiveDivision('d3h')
+    const out = leaderboard('full').rows.filter((r) => r.status === 'Out: group stage')
+    expect(out.every((r) => r.basis === 'per game')).toBe(true)
+    const pos = (t: string) => out.findIndex((r) => r.team === t)
+    // ISFA finished last of 3, WESLEY last of 4: both rank below 3rd-of-5 and 4th-of-5 teams
+    expect(pos('ISFA')).toBeGreaterThan(pos('CSS'))
+    expect(pos('ISFA')).toBeGreaterThan(pos('SKWGSS'))
+    expect(pos('WESLEY')).toBeGreaterThan(pos('MSCHK'))
+    // best placed: 3rd in a five-team group
+    expect(out[0].groupPos / out[0].groupSize).toBeLessThanOrEqual(out[out.length - 1].groupPos / out[out.length - 1].groupSize)
   })
 })

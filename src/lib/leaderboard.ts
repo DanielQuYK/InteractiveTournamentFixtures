@@ -18,6 +18,7 @@ import {
 export type LeaderboardMode = 'stage' | 'full'
 
 export const LEADERBOARD_METRICS = [
+  { key: 'pos', label: 'Group finish (only when teams played different numbers of games)', note: 'How far up its own group a team finished: its place divided by the number of teams in the group (2nd of 5 = 0.4, 2nd of 3 = 0.67, last = 1.0), lower is better. This stops a team that merely finished last in a small group looking better than a mid-table team from a larger one.' },
   {
     key: 'pts',
     label: 'Points',
@@ -217,10 +218,16 @@ export function leaderboard(mode: LeaderboardMode): Leaderboard {
   // by record: on totals when they all played the same number of games, otherwise per game.
   const live = rows.filter((r) => !r.withdrawn)
   const metric = (n: number | null) => (n === null ? -Infinity : n)
+  const share = (r: LeaderRow) => (r.groupSize ? r.groupPos / r.groupSize : 1)
   const compare = (basis: 'totals' | 'per game') => (a: LeaderRow, b: LeaderRow) => {
     const pick = (r: LeaderRow): [number | null, number | null, number | null] =>
       basis === 'totals' ? [r.pts.total, r.gd.total, r.gf.total] : [r.ppg, r.gdpg, r.gfpg]
     const x = pick(a), y = pick(b)
+    // Different numbers of games means different group sizes: first compare how far up its own group each team finished
+    if (basis === 'per game') {
+      const d = share(a) - share(b)
+      if (d) return d
+    }
     for (let k = 0; k < 3; k++) {
       const d = metric(y[k]) - metric(x[k])
       if (d) return d
@@ -284,7 +291,7 @@ export function leaderboard(mode: LeaderboardMode): Leaderboard {
       notes.push(
         block[0].basis === 'totals'
           ? `Places ${block[0].best}–${block[0].worst}: all ${block.length} teams played ${games[0]} games, so totals are compared directly.`
-          : `Places ${block[0].best}–${block[0].worst}: teams played ${games[0]}–${games[games.length - 1]} games (byes or different group sizes), so averages per game are compared.`,
+          : `Places ${block[0].best}–${block[0].worst}: teams played ${games[0]}–${games[games.length - 1]} games (byes or different group sizes), so they are ordered by how far up their own group they finished (place ÷ teams in group), then by per-game averages.`,
       )
     }
   }

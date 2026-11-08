@@ -79,10 +79,12 @@ export function Leaderboard({ onTeam }: { onTeam: (t: string) => void }) {
                 </ol>
               </li>
               <li>
-                <strong>Totals when everyone played the same number of games, averages otherwise.</strong> If every team in a tied
-                block played the same number of games (for example Division One: 5 games for teams out in the groups), totals are
-                compared directly. If not (a bye, or groups of different sizes), points, goal difference and goals scored are
-                divided by games played. The last column shows which was used.
+                <strong>Totals when everyone played the same number of games.</strong> If every team in a tied block played the same
+                number of games (for example Division One: 5 games for teams out in the groups), points, goal difference and goals
+                scored are compared as plain totals.
+                <strong> Group finish, then averages, when games differ.</strong> Groups can have 3, 4 or 5 teams, so teams played
+                different numbers of games. Then teams are first ordered by how far up their own group they finished (place ÷ teams in
+                group), and only then by points, goal difference and goals scored per game. The last column shows which was used.
               </li>
               <li>Teams still level on all three share a place (marked “=”).</li>
             </>
@@ -107,7 +109,7 @@ export function Leaderboard({ onTeam }: { onTeam: (t: string) => void }) {
             {division.koMatches.length
               ? 'The final-round line-up has not been set, so no team has reached or missed the knockout yet.'
               : 'No final-round bracket has been published.'}{' '}
-            Places below are provisional and ordered by group-stage record alone ({LEADERBOARD_METRICS.map((m) => m.label.toLowerCase()).join(', then ')}); averages per game are used where teams have played different numbers of games.
+            Places below are provisional and ordered by group-stage record alone ({LEADERBOARD_METRICS.filter((m) => m.key !== 'pos').map((m) => m.label.toLowerCase()).join(', then ')}); averages per game are used where teams have played different numbers of games.
           </p>
         )}
       </div>
@@ -159,7 +161,7 @@ export function Leaderboard({ onTeam }: { onTeam: (t: string) => void }) {
                         <td className="px-3 py-2 text-right tabular-nums"><Cell t={r.gf} ko={r.games.knockout > 0} /></td>
                         <td className="px-3 py-2 text-right tabular-nums"><Cell t={r.ga} ko={r.games.knockout > 0} /></td>
                         <td className="px-3 py-2 text-right tabular-nums"><Cell t={r.gd} sign ko={r.games.knockout > 0} /></td>
-                        {mode === 'full' && <td className="px-3 py-2 text-xs text-stone-500">{r.basis === 'totals' ? 'Totals' : r.basis === 'per game' ? 'Per game' : ''}</td>}
+                        {mode === 'full' && <td className="px-3 py-2 text-xs text-stone-500">{r.basis === 'totals' ? 'Totals' : r.basis === 'per game' ? 'Group finish, per game' : ''}</td>}
                       </tr>
                     ))}
                   </tbody>
