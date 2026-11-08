@@ -31,11 +31,19 @@ export function GroupStage({ onTeam, onMatch }: { onTeam: (t: string) => void; o
       <div className="glass-surface mb-8 rounded-lg border border-stone-200 bg-white p-4 text-sm text-stone-600">
         <p className="font-medium text-stone-800">Notes</p>
         <ul className="mt-1.5 list-disc space-y-1 pl-5">
-          <li>
-            The top two teams in each group (shaded) advance to the final round
-            {activeDivision().lineupConfirmed ? '' : '; until the organisers announce the line-up the shading shows the current top two only'}.
-            Ranking: points, then results between teams level on points, goal difference and goals scored.
-          </li>
+          {activeDivision().koMatches.length > 0 ? (
+            <li>
+              The top two teams in each group (shaded) advance to the final round
+              {activeDivision().lineupConfirmed ? '' : '; until the organisers announce the line-up the shading shows the current top two only'}.
+              Ranking: points, then results between teams level on points, goal difference and goals scored.
+            </li>
+          ) : (
+            <li>
+              The organisers have published group fixtures only: how many teams advance, and the final-round bracket, are not
+              yet announced, so no qualification places are shown. Until games are played every team is level and listed
+              alphabetically. Ranking: points, then results between teams level on points, goal difference and goals scored.
+            </li>
+          )}
           <li>Remarks: {Object.entries(REMARKS).map(([k, v]) => `${k} = ${v}`).join('; ')}.</li>
           {Object.entries(WITHDRAWN).map(([team, note]) => (
             <li key={team}>
@@ -64,6 +72,7 @@ export function GroupBlock({ group, onTeam, onMatch }: { group: number; onTeam: 
   const matches = GROUP_MATCHES.filter((m) => m.group === group).sort(
     (a, b) => a.date.localeCompare(b.date) || timeMinutes(a.time) - timeMinutes(b.time),
   )
+  const showQualifiers = activeDivision().koMatches.length > 0
   const withdrawn = [...new Set(matches.flatMap((m) => [m.home, m.away]))].filter((t) => WITHDRAWN[t])
   return (
     <section>
@@ -87,7 +96,7 @@ export function GroupBlock({ group, onTeam, onMatch }: { group: number; onTeam: 
             </thead>
             <tbody>
               {table.map((r, i) => (
-                <tr key={r.team} className={`liquid border-t border-stone-100 ${i < 2 ? 'bg-emerald-50' : ''}`}>
+                <tr key={r.team} className={`liquid border-t border-stone-100 ${i < 2 && showQualifiers && r.p > 0 ? 'bg-emerald-50' : ''}`}>
                   <td className="py-2 pl-3 text-stone-500">{i + 1}</td>
                   <td className="py-2">
                     <TeamBtn name={r.team} onTeam={onTeam} />

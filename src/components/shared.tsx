@@ -1,6 +1,6 @@
 import { koById, slotTeam, slotText, type GroupMatch, type Slot } from '../lib/data'
 
-export type Tab = 'group' | 'knockout' | 'stats' | 'simulation'
+export type Tab = 'group' | 'knockout' | 'leaderboard' | 'stats' | 'simulation'
 export type Detail = { kind: 'ko'; id: string } | { kind: 'group'; m: GroupMatch }
 
 /* ---------- shared ---------- */

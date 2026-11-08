@@ -7,6 +7,7 @@ import { Simulation } from '../components/Simulation'
 import { Home } from '../components/Home'
 import { DIVISIONS } from '../lib/divisions'
 import { GROUP_MATCHES, setActiveDivision } from '../lib/data'
+import { simulationBlockers } from '../lib/readiness'
 
 afterEach(() => setActiveDivision('d3h'))
 const noop = () => {}
@@ -14,9 +15,11 @@ const noop = () => {}
 describe('home page', () => {
   it('lists every division and marks other grades unavailable', () => {
     const html = renderToStaticMarkup(<Home onOpen={noop} />)
-    for (const d of DIVISIONS) expect(html).toContain(d.title.replace(' · Boys A Grade', ''))
+    for (const d of DIVISIONS) if (d.grade === 'A') expect(html).toContain(d.title.split(' · ')[0])
     expect(html).toContain('Not yet available')
-    expect(html).toContain('Line-up to be drawn')
+    expect(html).toContain('lg:grid-cols-4')
+    expect(html).toContain('Latest stage')
+    expect(html).toContain('Knockout games played')
   })
 })
 
@@ -32,7 +35,7 @@ describe.each(DIVISIONS.map((d) => d.id))('%s views', (id) => {
       renderToStaticMarkup(<GroupStage onTeam={noop} onMatch={noop} />),
       renderToStaticMarkup(<Knockout onTeam={noop} onMatch={noop} />),
       renderToStaticMarkup(<TeamStats onTeam={noop} />),
-      DIVISIONS.find((d) => d.id === id)!.lineupConfirmed ? renderToStaticMarkup(<Simulation />) : '',
+      simulationBlockers().length === 0 ? renderToStaticMarkup(<Simulation />) : '',
     ].join('\n')
     expect(html.length).toBeGreaterThan(1000)
     // Team abbreviations appear as whole words; none from another division may leak in

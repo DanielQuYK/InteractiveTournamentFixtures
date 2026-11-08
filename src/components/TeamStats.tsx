@@ -5,6 +5,18 @@ import { EmptyComparison, TeamBtn } from './shared'
 import { METRICS, type Metric, type TeamRec, groupInfo, groupSeed, teamRecords } from '../lib/stats'
 
 export function TeamStats({ onTeam }: { onTeam: (t: string) => void }) {
+  if (!teamRecords().some((r) => r.gp > 0)) {
+    return (
+      <div className="glass-surface max-w-2xl rounded-lg border border-stone-200 bg-white p-5 text-sm text-stone-700" role="note">
+        <p className="font-semibold text-stone-900">No statistics yet</p>
+        <p className="mt-1">No games have been played in this competition, so there is nothing to measure. Statistics appear as results are recorded.</p>
+      </div>
+    )
+  }
+  return <TeamStatsView onTeam={onTeam} />
+}
+
+function TeamStatsView({ onTeam }: { onTeam: (t: string) => void }) {
   const recs = useMemo(() => teamRecords().filter((r) => r.gp > 0), [])
   const [view, setView] = usePersistentState<'ranking' | 'metrics' | 'teams'>('stats-view', 'ranking')
   const [activeMetric, setActiveMetric] = usePersistentState('stats-metric', 'win')

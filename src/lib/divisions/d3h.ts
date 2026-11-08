@@ -68,12 +68,14 @@ const GROUPS_RAW = `
 
 export const D3H: DivisionConfig = {
   id: 'd3h',
+  grade: 'A',
   level: 'Division Three',
   region: 'Hong Kong Island',
   shortName: 'D3 · HK Island',
   title: 'Division Three (HK) · Boys A Grade',
   blurb: '7 groups, 14 teams in the final round',
   documentDate: '5 November 2026',
+  asOf: '2026-11-08',
   groupsRaw: GROUPS_RAW,
   withdrawn: {"CCHK": "Withdrew on 22 September 2026"},
   penalties: {"ISFA": 3},

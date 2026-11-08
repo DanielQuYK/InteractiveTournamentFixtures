@@ -18,6 +18,7 @@ import {
 } from "../lib/data"
 import { type Detail, DataNotice, TeamBtn } from "./shared"
 import { validateResults } from "../lib/validation"
+import { KnockoutTracker } from "./KnockoutTracker"
 import { BracketTip, BracketToolbar, BracketViewport, useBracketZoom } from "./BracketViewer"
 import { BYES, BYE_H, CARD_H, CARD_W, POS, TAG, colX } from "../lib/bracketLayout"
 import { groupSeed } from "../lib/stats"
@@ -247,7 +248,23 @@ function KnockoutIntro() {
   )
 }
 
-export function Knockout({
+export function Knockout(props: { onTeam: (t: string) => void; onMatch: (d: Detail) => void }) {
+  if (KO_MATCHES.length === 0) {
+    return (
+      <div className="glass-surface max-w-2xl rounded-lg border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900" role="note">
+        <p className="font-semibold">Final round not announced yet</p>
+        <p className="mt-1">
+          The organisers have published the group fixtures for {activeDivision().title} but not the final-round bracket, so
+          there are no knockout matches, dates or seeds to show. This tab fills in once the bracket is released; no line-up is
+          assumed in the meantime.
+        </p>
+      </div>
+    )
+  }
+  return <KnockoutBracket {...props} />
+}
+
+function KnockoutBracket({
   onTeam,
   onMatch,
 }: {
@@ -259,6 +276,7 @@ export function Knockout({
   return (
     <div>
       <DataNotice issues={resultIssues} title="Results check" />
+      <KnockoutTracker />
       <div className="mb-5 max-w-3xl space-y-2 text-sm text-stone-600">
         <KnockoutIntro />
       </div>

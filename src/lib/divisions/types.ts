@@ -23,6 +23,8 @@ export interface KoMatchSpec {
 /** Everything that defines one division or district: its groups, final-round bracket and results. */
 export interface DivisionConfig {
   id: string
+  /** Which age/ability grade the competition belongs to. */
+  grade: 'A' | 'B'
   level: string
   region: string
   shortName: string
@@ -30,7 +32,12 @@ export interface DivisionConfig {
   blurb: string
   /** Date of the organiser's latest fixture document. */
   documentDate: string
-  /** group|game|dd-mm|time|home|away|venue|score|remark */
+  /**
+   * Last day (ISO) for which results are believed to be up to date. A game dated on or before this
+   * day with no result is shown as awaiting its result. Blank when no results are tracked.
+   */
+  asOf: string
+  /** group|game|dd-mm (or dd-mm-yy for another year)|time|home|away|venue|score|remark. A blank score means not played. */
   groupsRaw: string
   withdrawn: Record<string, string>
   /** Points deducted after disqualification. */

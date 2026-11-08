@@ -4,7 +4,7 @@ import { activeDivisionId } from './data'
 /** State that survives tab switches and reloads within the browser session. */
 export function usePersistentState<T>(key: string, initial: T) {
   // Scoped to the division being viewed so settings and results never carry over between competitions.
-  const storageKey = `${activeDivisionId()}-boys-a:${key}`
+  const storageKey = `${activeDivisionId()}:${key}`
   const [value, setValue] = useState<T>(() => {
     try {
       const raw = sessionStorage.getItem(storageKey)

@@ -4,11 +4,14 @@ import { D3H } from './d3h'
 import { K1 } from './k1'
 import { K2 } from './k2'
 import { K3 } from './k3'
+import { D1B, D2B, D3HB, K1B, K2B, K3B } from './boysB'
 import type { DivisionConfig } from './types'
 
 export type { DivisionConfig, KoMatchSpec, KoRound, KoSlotSpec } from './types'
 
 /** Every division available, in the order shown on the home page. */
-export const DIVISIONS: DivisionConfig[] = [D1, D2, D3H, K1, K2, K3]
+export const DIVISIONS: DivisionConfig[] = [D1, D2, D3H, K1, K2, K3, D1B, D2B, D3HB, K1B, K2B, K3B]
+
+export const divisionsForGrade = (grade: 'A' | 'B') => DIVISIONS.filter((d) => d.grade === grade)
 
 export const divisionById = (id: string) => DIVISIONS.find((d) => d.id === id)

@@ -36,12 +36,14 @@ const GROUPS_RAW = `
 
 export const D1: DivisionConfig = {
   id: 'd1',
+  grade: 'A',
   level: 'Division One',
   region: '',
   shortName: 'D1',
   title: 'Division One · Boys A Grade',
   blurb: '2 groups, 4 teams in the final round',
   documentDate: '27 October 2026',
+  asOf: '2026-10-27',
   groupsRaw: GROUPS_RAW,
   withdrawn: {},
   penalties: {"KGV": 3},

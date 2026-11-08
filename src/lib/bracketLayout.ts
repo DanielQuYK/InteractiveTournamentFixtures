@@ -11,6 +11,8 @@ export const OFF = 12 // compact gap between round headings and the first bye ca
 export const EDGE_PAD = 28
 export const colX = (c: number) => EDGE_PAD + c * (CARD_W + GAP)
 export const BYE_H = 84
+/** Space kept free above the first card for the round headings. */
+const HEAD_CLEAR = 48
 
 type Round = "R14" | "QF" | "SF" | "F"
 const ROUNDS: Round[] = ["R14", "QF", "SF", "F"]
@@ -71,6 +73,7 @@ const layoutFor = perDivision((): Layout => {
     pos[m.id] = { x: colX(col(m)), y }
     return y
   }
+  if (!KO_MATCHES.some((m) => m.id === "F")) return { pos, byes, rounds: [], width: EDGE_PAD * 2 + CARD_W, height: 0 }
   place(koById("F"))
   const final = pos.F
   const tp = KO_MATCHES.find((m) => m.round === "TP")
@@ -84,12 +87,24 @@ const layoutFor = perDivision((): Layout => {
     pos[po.id] = { x: final.x, y: (tp ? pos[tp.id].y : final.y) + U * 1.3 }
     bottom = Math.max(bottom, pos[po.id].y)
   }
+  // Keep every card, its caption and every bye clear of the round headings along the top. Without
+  // byes (for example a four or eight-team bracket) the first card would otherwise sit under them.
+  const top = Math.min(
+    ...Object.values(pos).map((p) => p.y - CARD_H / 2 - 24),
+    ...byes.map((b) => b.y - BYE_H / 2),
+  )
+  const shift = Math.max(0, HEAD_CLEAR - top)
+  if (shift) {
+    for (const p of Object.values(pos)) p.y += shift
+    for (const b of byes) b.y += shift
+    bottom += shift
+  }
   return {
     pos,
     byes,
     rounds,
     width: colX(rounds.length - 1) + CARD_W + EDGE_PAD,
-    height: Math.max(leaf * U + OFF + 20, bottom + CARD_H / 2 + 44),
+    height: Math.max(leaf * U + OFF + 20 + shift, bottom + CARD_H / 2 + 44),
   }
 })
 

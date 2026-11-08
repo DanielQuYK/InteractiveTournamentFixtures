@@ -9,11 +9,14 @@ import { MatchModal } from './components/MatchModal'
 import { TeamStats } from './components/TeamStats'
 import { Simulation } from './components/Simulation'
 import { Home } from './components/Home'
+import { Leaderboard } from './components/Leaderboard'
+import { simulationBlockers } from './lib/readiness'
 import { activeDivision, setActiveDivision } from './lib/data'
 import { divisionById } from './lib/divisions'
 
 function DivisionPage({ onHome }: { onHome: () => void }) {
   const division = activeDivision()
+  const blockers = simulationBlockers()
   const [tab, setTab] = usePersistentState<Tab>('tab', 'group')
   const [team, setTeam] = useState<string | null>(null)
   const [detail, setDetail] = useState<Detail | null>(null)
@@ -44,10 +47,10 @@ function DivisionPage({ onHome }: { onHome: () => void }) {
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-300">Inter-School Football Competition 2026–2027</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{division.title}</h1>
           <p className="mt-1 text-sm text-emerald-200/80">
-            {division.region ? `${division.region} · ` : ''}Group stage results and final round (single knock-out) · fixtures as published {division.documentDate}
+            {division.region ? `${division.region} · ` : ''}{division.koMatches.length > 0 ? 'Group stage results and final round (single knock-out)' : 'Group stage fixtures and results'}{division.documentDate ? ` · fixtures as published ${division.documentDate}` : ''}
           </p>
           <nav className="-mx-2 mt-5 flex gap-1 overflow-x-auto px-2 pt-2" role="tablist">
-            {(['group', 'knockout', 'stats', 'simulation'] as Tab[]).map((t) => (
+            {(['group', 'knockout', 'leaderboard', 'stats', 'simulation'] as Tab[]).map((t) => (
               <button
                 key={t}
                 role="tab"
@@ -57,7 +60,7 @@ function DivisionPage({ onHome }: { onHome: () => void }) {
                   tab === t ? 'bg-stone-50 text-emerald-950' : 'text-emerald-100'
                 }`}
               >
-                {t === 'group' ? 'Group Stage' : t === 'knockout' ? 'Knockout' : t === 'stats' ? 'Team Stats' : 'Simulation'}
+                {t === 'group' ? 'Group Stage' : t === 'knockout' ? 'Knockout' : t === 'leaderboard' ? 'Leaderboard' : t === 'stats' ? 'Team Stats' : 'Simulation'}
               </button>
             ))}
           </nav>
@@ -69,17 +72,24 @@ function DivisionPage({ onHome }: { onHome: () => void }) {
           <GroupStage onTeam={setTeam} onMatch={setDetail} />
         ) : tab === 'knockout' ? (
           <Knockout onTeam={setTeam} onMatch={setDetail} />
+        ) : tab === 'leaderboard' ? (
+          <Leaderboard onTeam={setTeam} />
         ) : tab === 'stats' ? (
           <TeamStats onTeam={setTeam} />
-        ) : division.lineupConfirmed ? (
+        ) : blockers.length === 0 ? (
           <Simulation />
         ) : (
           <div className="glass-surface max-w-2xl rounded-lg border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900" role="note">
             <p className="font-semibold">Simulation is not available yet</p>
-            <p className="mt-1">
-              The organisers have not yet drawn the final-round line-up for {division.title.replace(' · Boys A Grade', '')}, so
-              there are no knockout pairings to simulate. It will become available as soon as the line-up is published; no
-              line-up is assumed in the meantime.
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {blockers.map((b) => <li key={b}>{b}</li>)}
+            </ul>
+            <p className="mt-3">
+              Team strength is judged only from this competition’s own results.
+              {division.grade === 'B'
+                ? ' A school’s A Grade results are deliberately not used: a strong A Grade squad says little about its B Grade team, which has different players.'
+                : ' Results from other divisions are never used.'}{' '}
+              The simulation will unlock once these conditions are met; nothing is assumed in the meantime.
             </p>
           </div>
         )}

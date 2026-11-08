@@ -5,6 +5,7 @@ import {
 import { DIVISIONS } from '../lib/divisions'
 import { MATCH_ORDER, FINISHES, emptyAggregate, runOneSimulation, simulationStrengths, startStageOptions } from '../lib/simulation'
 import { BYES, POS, bracketLines, totalH, totalW } from '../lib/bracketLayout'
+import { simulationBlockers } from '../lib/readiness'
 import { validateQualifiers, validateResults } from '../lib/validation'
 
 afterEach(() => setActiveDivision('d3h'))
@@ -17,7 +18,7 @@ const teamsOf = (id: string) => {
 describe('division registry', () => {
   it('has unique ids', () => {
     expect(new Set(DIVISIONS.map((d) => d.id)).size).toBe(DIVISIONS.length)
-    expect(DIVISIONS.map((d) => d.id)).toEqual(['d1', 'd2', 'd3h', 'k1', 'k2', 'k3'])
+    expect(DIVISIONS.map((d) => d.id)).toEqual(['d1', 'd2', 'd3h', 'k1', 'k2', 'k3', 'd1b', 'd2b', 'd3hb', 'k1b', 'k2b', 'k3b'])
   })
 
   it.each([
@@ -119,6 +120,59 @@ describe.each(['k1', 'k2', 'k3'])('%s pending bracket', (id) => {
   it('has complete groups only where every game has a result', () => {
     setActiveDivision(id)
     expect(typeof groupComplete(1)).toBe('boolean')
+  })
+})
+
+describe('Boys B Grade', () => {
+  it.each([
+    ['d1b', 2, 30, 12], ['d2b', 4, 40, 20], ['d3hb', 6, 52, 28], ['k1b', 6, 52, 28], ['k2b', 5, 50, 25], ['k3b', 6, 52, 28],
+  ] as const)('%s has the published fixtures and nothing played', (id, groups, games, teams) => {
+    setActiveDivision(id)
+    expect([...GROUPS]).toHaveLength(groups)
+    expect(GROUP_MATCHES).toHaveLength(games)
+    expect(teamsOf(id).size).toBe(teams)
+    expect(GROUP_MATCHES.every((m) => m.hs === null && m.as === null)).toBe(true)
+    expect(KO_MATCHES).toHaveLength(0)
+    expect(standings(1).every((r) => r.p === 0 && r.pts === 0)).toBe(true)
+  })
+
+  it('keeps January 2027 fixtures in the right year', () => {
+    setActiveDivision('k1b')
+    expect(GROUP_MATCHES.some((m) => m.date.startsWith('2027-01'))).toBe(true)
+    expect(GROUP_MATCHES.some((m) => m.date.startsWith('2026-11'))).toBe(true)
+  })
+
+  it('is a full round-robin in every group', () => {
+    for (const id of ['d1b', 'd2b', 'd3hb', 'k1b', 'k2b', 'k3b']) {
+      setActiveDivision(id)
+      for (const g of GROUPS) {
+        const ms = GROUP_MATCHES.filter((m) => m.group === g)
+        const teams = new Set(ms.flatMap((m) => [m.home, m.away]))
+        const pairs = new Set(ms.map((m) => [m.home, m.away].sort().join('|')))
+        expect(pairs.size).toBe(ms.length)
+        expect(ms.length).toBe((teams.size * (teams.size - 1)) / 2)
+      }
+    }
+  })
+
+  it('refuses to simulate without results or a bracket, and never borrows A Grade ratings', () => {
+    setActiveDivision('d1b')
+    const reasons = simulationBlockers().join(' ')
+    expect(reasons).toMatch(/bracket/)
+    expect(reasons).toMatch(/No group game has been played/)
+    setActiveDivision('d1')
+    expect(simulationBlockers()).toEqual([])
+    // A Grade results never appear in the B Grade competition
+    setActiveDivision('d1b')
+    expect(simulationStrengths().details.size).toBe(0)
+  })
+})
+
+describe('bracket clears the round headings', () => {
+  it.each(['d1', 'd2', 'd3h', 'k1'])('%s: no card or bye starts above the heading band', (id) => {
+    setActiveDivision(id)
+    const tops = [...Object.values(POS).map((p) => p.y - 120 / 2 - 24), ...BYES.map((b) => b.y - 84 / 2)]
+    expect(Math.min(...tops)).toBeGreaterThanOrEqual(44)
   })
 })
 

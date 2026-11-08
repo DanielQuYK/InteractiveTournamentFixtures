@@ -142,12 +142,12 @@ function build(config: DivisionConfig): Runtime {
     .split('\n')
     .map((l) => {
       const [g, game, d, time, home, away, venue, score, remark] = l.split('|')
-      const [dd, mm] = d.split('-')
+      const [dd, mm, yy] = d.split('-')
       const parts = score && score.includes(':') ? score.split(':').map(Number) : [null, null]
       return {
         group: +g,
         game: +game,
-        date: `2026-${mm}-${dd}`,
+        date: `${yy ? 2000 + +yy : 2026}-${mm}-${dd}`,
         time,
         home,
         away,

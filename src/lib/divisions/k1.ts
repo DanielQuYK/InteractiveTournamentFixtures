@@ -62,12 +62,14 @@ const GROUPS_RAW = `
 
 export const K1: DivisionConfig = {
   id: 'k1',
+  grade: 'A',
   level: 'Division Three',
   region: 'Kowloon 1',
   shortName: 'D3 · Kowloon 1',
   title: 'Division Three (K1) · Boys A Grade',
   blurb: '6 groups in progress; knockout line-up not yet drawn',
   documentDate: '27 October 2026',
+  asOf: '2026-10-27',
   groupsRaw: GROUPS_RAW,
   withdrawn: {},
   penalties: {},
