@@ -33,4 +33,6 @@ export const KO_RESULTS: Record<string, KoResult> = {
   R6: { score: [4, 1] }, // HKUGA 4–1 SPCC
   // Source reported IKTMC as the 2–0 winner; retain the TBC marker until independently checked.
   Q1: { score: [0, 2], scoreTbc: true },
+  // Reported CFSS 2–2 SKHTSK, CFSS won 3–2 on penalties; awaiting confirmation from HKSSF.
+  Q3: { score: [2, 2], pens: [3, 2], scoreTbc: true },
 }

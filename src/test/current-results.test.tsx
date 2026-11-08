@@ -57,6 +57,14 @@ describe("Round of 14 results", () => {
     expect(koWinner(r5)).toBe("SKHTSK")
     expect(officialScore(r5)).toEqual([1, 1])
   })
+  it("records CFSS's reported penalty win over SKHTSK as awaiting confirmation", () => {
+    const q3 = koById("Q3")
+    expect(q3.score).toEqual([2, 2])
+    expect(q3.pens).toEqual([3, 2])
+    expect(q3.scoreTbc).toBe(true)
+    expect(koWinner(q3)).toBe("CFSS")
+    expect(slotTeam(koById("S2").home)).toBe("CFSS")
+  })
   it("uses the amended Quarter-final 4 fixture", () => {
     const q4 = koById("Q4")
     expect(q4.date).toBe("2026-11-10")
@@ -69,9 +77,11 @@ describe("Round of 14 results", () => {
     }
     expect(knockoutTeamState("QC").target.id).toBe("R1")
     expect(knockoutTeamState("HW").target.id).toBe("R5")
+    expect(knockoutTeamState("SKHTSK").eliminated).toBe(true)
+    expect(knockoutTeamState("SKHTSK").target.id).toBe("Q3")
     expect(knockoutTeamState("SKHLMC").eliminated).toBe(true)
     expect(knockoutTeamState("SKHLMC").target.id).toBe("Q1")
-    for (const [team, next] of [["IKTMC", "S1"], ["SKHTSK", "Q3"], ["CANADIAN", "Q4"]]) {
+    for (const [team, next] of [["IKTMC", "S1"], ["CFSS", "S2"], ["CANADIAN", "Q4"]]) {
       const state = knockoutTeamState(team)
       expect(state.eliminated).toBe(false)
       expect(state.target.id).toBe(next)
@@ -86,7 +96,7 @@ describe("starting stage", () => {
     expect(options.find((o) => o.recommended)?.stage).toBe("QF")
     expect(latestStartStage()).toBe("QF")
     expect(fixedMatchIds("R14").size).toBe(0)
-    expect([...fixedMatchIds("QF")].sort()).toEqual(["Q1", "R1", "R2", "R3", "R4", "R5", "R6"])
+    expect([...fixedMatchIds("QF")].sort()).toEqual(["Q1", "Q3", "R1", "R2", "R3", "R4", "R5", "R6"])
   })
   it("fixes the official Round of 14 when starting from the quarter-finals", () => {
     const totals = simulate("QF", 100)
@@ -192,7 +202,7 @@ describe("simulation panels", () => {
     expect(fromR14).toContain("group-stage matches only")
     expect(fromR14).toContain("not used from this stage")
     const fromQf = renderToStaticMarkup(<Parameters stage="QF" />)
-    expect(fromQf).toContain("plus 7 official knockout result")
+    expect(fromQf).toContain("plus 8 official knockout result")
   })
   it("lists model parameters and per-team reasons, with editing off until switched on", () => {
     const html = renderToStaticMarkup(<Parameters stage="QF" />)

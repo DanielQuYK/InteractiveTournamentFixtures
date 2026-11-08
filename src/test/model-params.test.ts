@@ -99,12 +99,12 @@ describe("edited settings change the model", () => {
         [...ALL_KO_TEAMS].map((t) => [t, emptyAggregate(t)]),
       )
       for (let i = 0; i < 1500; i++) runOneSimulation(strengths, totals)
-      return totals.get("SKHTSK")!.finishes.champion
+      return totals.get("CFSS")!.finishes.champion
     }
     const base = run(simulationStrengths(fixed))
     const boosted = run(
       simulationStrengths(fixed, DEFAULT_PARAMS, {
-        SKHTSK: { attack: 3, weakness: 0.3 },
+        CFSS: { attack: 3, weakness: 0.3 },
       }),
     )
     expect(boosted).toBeGreaterThan(base)
