@@ -1,3 +1,7 @@
+import { DIVISIONS, divisionById } from './divisions'
+import type { DivisionConfig, KoRound, KoSlotSpec } from './divisions/types'
+import { liveArray, liveRecord, liveSet } from './live'
+
 /**
  * Joins the last three words with non-breaking spaces so a name such as
  * "Aberdeen Sports Ground" or "... No. 4" can never leave a lone word on its own line.
@@ -14,6 +18,13 @@ const VENUE_NAMES: Record<string, string> = {
   CB: 'Causeway Bay Sports Ground',
   SKP: 'So Kon Po Recreation Ground',
   KT: 'Kai Tak Youth Sports Ground',
+  KBP: 'Kowloon Bay Park 11-a-side',
+  SKM: 'Shek Kip Mei Park Stage III',
+  PK1: 'Po Kong Village Road Park No. 1',
+  THT: 'Tai Hang Tung Recreation Playground No. 2',
+  LF: 'Lok Fu Recreation Ground',
+  KTP: 'Kowloon Tsai Park No. 3',
+  BS: 'Boundary Street Recreation Ground',
 }
 const VENUE_SHORT_NAMES: Record<string, string> = {
   HV: 'Happy Valley No. 4',
@@ -21,6 +32,13 @@ const VENUE_SHORT_NAMES: Record<string, string> = {
   CB: 'Causeway Bay',
   SKP: 'So Kon Po',
   KT: 'Kai Tak',
+  KBP: 'Kowloon Bay Park',
+  SKM: 'Shek Kip Mei',
+  PK1: 'Po Kong No. 1',
+  THT: 'Tai Hang Tung No. 2',
+  LF: 'Lok Fu',
+  KTP: 'Kowloon Tsai No. 3',
+  BS: 'Boundary Street',
 }
 
 export const VENUES: Record<string, string> = Object.fromEntries(
@@ -53,71 +71,6 @@ export interface GroupMatch {
   remark: string
 }
 
-// group|game|dd-mm|time|home|away|venue|score|remark
-const RAW = `
-1|1|27-09|9:30 AM|HKUGA|WESLEY|HV|1:0|
-1|2|27-09|10:45 AM|LHYMSS|LSTLKK|HV|1:1|
-1|3|10-10|2:45 PM|LSTLKK|HKUGA|HV|0:2|
-1|4|10-10|4:00 PM|WESLEY|LHYMSS|HV|0:1|
-1|5|18-10|9:30 AM|HKUGA|LHYMSS|HV|1:1|A (23/9)
-1|6|18-10|10:45 AM|LSTLKK|WESLEY|HV|3:1|A (18/9), A (23/9)
-2|1|28-09|4:15 PM|SKHLMC|CCHK|AB|-|C
-2|2|29-09|3:00 PM|SPCC|ISFA|CB|1:5|
-2|3|11-10|9:30 AM|ISFA|SKHLMC|HV|0:3|DQ* (-3 pts)
-2|4|11-10|10:45 AM|CCHK|SPCC|HV|-|C
-2|6|14-10|4:15 PM|ISFA|CCHK|SKP|-|C
-2|5|20-10|4:15 PM|SKHLMC|SPCC|CB|1:1|
-3|1|19-09|1:30 PM|HKTKP|KCC|HV|1:2|
-3|2|19-09|2:45 PM|ABLMCC|KC|HV|0:2|W
-3|4|29-09|3:00 PM|HKTKP|ABLMCC|HV|1:2|
-3|3|29-09|4:15 PM|KCC|CFSS|CB|4:0|
-3|5|04-10|9:30 AM|KC|HKTKP|HV|2:0|
-3|6|04-10|10:45 AM|CFSS|ABLMCC|HV|3:0|
-3|7|13-10|3:00 PM|ABLMCC|KCC|HV|0:4|
-3|8|13-10|4:15 PM|KC|CFSS|HV|2:5|
-3|9|20-10|3:00 PM|KCC|KC|HV|2:0|
-3|10|20-10|4:15 PM|CFSS|HKTKP|HV|7:1|
-4|1|19-09|4:00 PM|SPETER|HW|HV|3:3|
-4|3|29-09|4:15 PM|HW|MSCHK|HV|0:0|
-4|4|30-09|3:00 PM|SPETER|CSS|AB|3:6|
-4|5|05-10|4:15 PM|QC|SPETER|AB|8:1|
-4|6|06-10|3:00 PM|MSCHK|CSS|HV|0:0|
-4|7|13-10|3:00 PM|CSS|HW|CB|0:2|
-4|8|13-10|4:15 PM|QC|MSCHK|CB|2:2|
-4|2|17-10|4:00 PM|CSS|QC|HV|1:3|
-4|9|24-10|1:30 PM|HW|QC|CB|3:0|
-4|10|24-10|2:45 PM|MSCHK|SPETER|CB|1:0|
-5|1|20-09|10:45 AM|LCD|CANADIAN|HV|0:14|
-5|2|22-09|3:00 PM|SKWGSS|CWCC|CB|4:0|
-5|3|30-09|4:15 PM|CANADIAN|IKTMC|AB|6:0|
-5|4|30-09|3:00 PM|LCD|SKWGSS|SKP|0:2|
-5|5|06-10|4:15 PM|CWCC|LCD|HV|1:6|
-5|6|07-10|3:00 PM|IKTMC|SKWGSS|AB|1:1|
-5|7|14-10|3:00 PM|SKWGSS|CANADIAN|AB|0:4|
-5|8|14-10|4:15 PM|CWCC|IKTMC|AB|0:2|
-5|9|24-10|4:00 PM|CANADIAN|CWCC|CB|2:0|W
-5|10|24-10|1:30 PM|IKTMC|LCD|HV|13:1|
-6|1|22-09|3:00 PM|CGHC|BWFL|HV|0:2|W
-6|2|22-09|4:15 PM|KWSC|RC|HV|3:2|
-6|3|30-09|4:15 PM|BWFL|SJA|SKP|2:3|
-6|4|03-10|1:30 PM|CGHC|KWSC|HV|2:4|
-6|5|07-10|4:15 PM|RC|CGHC|AB|2:0|
-6|6|07-10|3:00 PM|SJA|KWSC|SKP|0:2|W
-6|7|14-10|3:00 PM|KWSC|BWFL|SKP|9:0|
-6|8|20-10|3:00 PM|RC|SJA|CB|1:2|
-6|9|24-10|2:45 PM|BWFL|RC|HV|2:2|
-6|10|24-10|4:00 PM|SJA|CGHC|HV|4:0|
-7|1|22-09|4:15 PM|HS|SKHTSK|CB|1:1|
-7|2|23-09|3:00 PM|ISS|AICH|AB|3:2|
-7|3|03-10|2:45 PM|SKHTSK|CCSC|HV|1:0|
-7|4|03-10|4:00 PM|HS|ISS|HV|1:3|
-7|5|07-10|4:15 PM|AICH|HS|SKP|4:3|
-7|6|10-10|1:30 PM|CCSC|ISS|HV|0:10|
-7|7|17-10|1:30 PM|ISS|SKHTSK|HV|1:3|
-7|8|17-10|2:45 PM|AICH|CCSC|HV|1:4|
-7|9|25-10|9:30 AM|SKHTSK|AICH|HV|2:3|
-7|10|25-10|10:45 AM|CCSC|HS|HV|2:2|
-`
 function parseTime(t: string) {
   const [hm, ap] = t.split(' ')
   let [h, m] = hm.split(':').map(Number)
@@ -126,31 +79,32 @@ function parseTime(t: string) {
 }
 export const timeMinutes = parseTime
 
-export const GROUP_MATCHES: GroupMatch[] = RAW.trim()
-  .split('\n')
-  .map((l) => {
-    const [g, game, d, time, home, away, venue, score, remark] = l.split('|')
-    const [dd, mm] = d.split('-')
-    const [hs, as] = score === '-' ? [null, null] : score.split(':').map(Number)
-    return {
-      group: +g,
-      game: +game,
-      date: `2026-${mm}-${dd}`,
-      time,
-      home,
-      away,
-      venue,
-      hs,
-      as,
-      remark,
-    }
-  })
+// ---------------- Slots and fixtures ----------------
+export type Slot =
+  | { kind: 'team'; team: string; seed: string }
+  | { kind: 'winner'; of: string }
+  | { kind: 'loser'; of: string }
+  /** A seed (for example "1st in a group") whose team has not been decided yet. */
+  | { kind: 'pending'; seed: string }
 
-export const WITHDRAWN: Record<string, string> = {
-  CCHK: 'Withdrew on 22 September 2026',
+export type KoRoundCode = KoRound
+
+export interface KoMatch {
+  id: string
+  label: string
+  round: KoRoundCode
+  date: string
+  time: string
+  venue: string
+  home: Slot
+  away: Slot
+  /** Enter once played: [home, away] and optional penalty shoot-out [home, away] */
+  score?: [number, number]
+  pens?: [number, number]
+  /** Winner confirmed before the scoreline is (e.g. decided on penalties, scoreline to be confirmed). */
+  winnerTeam?: string
+  scoreTbc?: boolean
 }
-// Points deducted following disqualification
-export const PENALTIES: Record<string, number> = { ISFA: 3 }
 
 export interface Standing {
   team: string
@@ -165,6 +119,131 @@ export interface Standing {
   penalty: number
 }
 
+// ---------------- Divisions ----------------
+interface Runtime {
+  config: DivisionConfig
+  groupMatches: GroupMatch[]
+  groups: number[]
+  koMatches: KoMatch[]
+  koTeams: Set<string>
+  roundNames: Record<KoRoundCode, string>
+}
+
+function toSlot(spec: KoSlotSpec): Slot {
+  if (spec.t === 'team') return { kind: 'team', team: spec.team, seed: spec.seed }
+  if (spec.t === 'w') return { kind: 'winner', of: spec.of }
+  if (spec.t === 'l') return { kind: 'loser', of: spec.of }
+  return { kind: 'pending', seed: spec.seed }
+}
+
+function build(config: DivisionConfig): Runtime {
+  const groupMatches: GroupMatch[] = config.groupsRaw
+    .trim()
+    .split('\n')
+    .map((l) => {
+      const [g, game, d, time, home, away, venue, score, remark] = l.split('|')
+      const [dd, mm] = d.split('-')
+      const parts = score && score.includes(':') ? score.split(':').map(Number) : [null, null]
+      return {
+        group: +g,
+        game: +game,
+        date: `2026-${mm}-${dd}`,
+        time,
+        home,
+        away,
+        venue,
+        hs: parts[0] as number | null,
+        as: parts[1] as number | null,
+        remark: remark ?? '',
+      }
+    })
+  const koMatches: KoMatch[] = config.koMatches.map((spec) => ({
+    id: spec.id,
+    label: spec.label,
+    round: spec.round,
+    date: spec.date,
+    time: spec.time,
+    venue: spec.venue,
+    home: toSlot(spec.home),
+    away: toSlot(spec.away),
+  }))
+  // Apply recorded results (see results.ts)
+  for (const m of koMatches) {
+    const r = config.results[m.id]
+    if (r) {
+      m.score = r.score
+      m.pens = r.pens
+      m.winnerTeam = r.winner
+      m.scoreTbc = r.scoreTbc
+    }
+  }
+  const koTeams = new Set(
+    koMatches
+      .flatMap((m) => [m.home, m.away])
+      .filter((s): s is Extract<Slot, { kind: 'team' }> => s.kind === 'team')
+      .map((s) => s.team),
+  )
+  return {
+    config,
+    groupMatches,
+    groups: [...new Set(groupMatches.map((m) => m.group))].sort((a, b) => a - b),
+    koMatches,
+    koTeams,
+    roundNames: {
+      R14: config.firstRoundName,
+      QF: 'Quarter-final',
+      SF: 'Semi-final',
+      TP: 'Third-place play-off',
+      F: 'Final',
+      PO: 'Group third-place play-off',
+    },
+  }
+}
+
+const runtimes = new Map<string, Runtime>()
+let activeId = 'd3h'
+
+function runtime(): Runtime {
+  let r = runtimes.get(activeId)
+  if (!r) {
+    const config = divisionById(activeId) ?? DIVISIONS[0]
+    r = build(config)
+    runtimes.set(config.id, r)
+  }
+  return r
+}
+
+/** Selects the division all data helpers and views read from. Call before rendering that division. */
+export function setActiveDivision(id: string) {
+  if (!divisionById(id)) throw new Error(`Unknown division "${id}"`)
+  activeId = id
+}
+export const activeDivisionId = () => activeId
+
+/** Memoises a derived value separately for each division. */
+export function perDivision<T>(build: () => T): () => T {
+  const cache = new Map<string, T>()
+  return () => {
+    if (!cache.has(activeId)) cache.set(activeId, build())
+    return cache.get(activeId)!
+  }
+}
+export const activeDivision = () => runtime().config
+
+/** Data for the active division. These behave like ordinary arrays, records and sets. */
+export const GROUP_MATCHES: GroupMatch[] = liveArray(() => runtime().groupMatches)
+export const GROUPS: number[] = liveArray(() => runtime().groups)
+export const KO_MATCHES: KoMatch[] = liveArray(() => runtime().koMatches)
+export const ALL_KO_TEAMS: Set<string> = liveSet(() => runtime().koTeams)
+export const WITHDRAWN: Record<string, string> = liveRecord(() => runtime().config.withdrawn)
+// Points deducted following disqualification
+export const PENALTIES: Record<string, number> = liveRecord(() => runtime().config.penalties)
+export const ROUND_NAME: Record<KoRoundCode, string> = liveRecord(() => runtime().roundNames) as Record<KoRoundCode, string>
+
+/**
+ * Standings for one group. Teams level on points are separated by their results against each other
+ * (points, goal difference, goals scored), then by overall goal difference, goals scored and name.
+ */
 export function standings(group: number): Standing[] {
   const map = new Map<string, Standing>()
   const get = (t: string) => {
@@ -172,8 +251,8 @@ export function standings(group: number): Standing[] {
       map.set(t, { team: t, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0, penalty: PENALTIES[t] ?? 0 })
     return map.get(t)!
   }
-  for (const m of GROUP_MATCHES.filter((m) => m.group === group)) {
-    if (WITHDRAWN[m.home] || WITHDRAWN[m.away]) continue
+  const played = GROUP_MATCHES.filter((m) => m.group === group && !WITHDRAWN[m.home] && !WITHDRAWN[m.away])
+  for (const m of played) {
     const h = get(m.home)
     const a = get(m.away)
     if (m.hs === null || m.as === null) continue
@@ -185,74 +264,45 @@ export function standings(group: number): Standing[] {
   }
   const rows = [...map.values()]
   rows.forEach((r) => { r.gd = r.gf - r.ga; r.pts -= r.penalty })
-  return rows.sort((x, y) => y.pts - x.pts || y.gd - x.gd || y.gf - x.gf || x.team.localeCompare(y.team))
-}
 
-export const GROUPS = [1, 2, 3, 4, 5, 6, 7]
-
-import { KO_RESULTS } from './results'
-
-// ---------------- Knockout ----------------
-export type Slot =
-  | { kind: 'team'; team: string; seed: string }
-  | { kind: 'winner'; of: string }
-  | { kind: 'loser'; of: string }
-
-export interface KoMatch {
-  id: string
-  label: string
-  round: 'R14' | 'QF' | 'SF' | 'TP' | 'F'
-  date: string
-  time: string
-  venue: string
-  home: Slot
-  away: Slot
-  /** Enter once played: [home, away] and optional penalty shoot-out [home, away] */
-  score?: [number, number]
-  pens?: [number, number]
-  /** Winner confirmed before the scoreline is (e.g. decided on penalties, scoreline to be confirmed). */
-  winnerTeam?: string
-  scoreTbc?: boolean
-}
-
-const T = (team: string, seed: string): Slot => ({ kind: 'team', team, seed })
-const W = (of: string): Slot => ({ kind: 'winner', of })
-const L = (of: string): Slot => ({ kind: 'loser', of })
-
-export const ROUND_NAME: Record<KoMatch['round'], string> = {
-  R14: 'Round of 14',
-  QF: 'Quarter-final',
-  SF: 'Semi-final',
-  TP: 'Third-place play-off',
-  F: 'Final',
-}
-
-export const KO_MATCHES: KoMatch[] = [
-  { id: 'R1', label: 'Round of 14 – Match 1', round: 'R14', date: '2026-11-03', time: '3:00 PM', venue: 'CB', home: T('IKTMC', '2nd, Group 5'), away: T('QC', '2nd, Group 4') },
-  { id: 'R2', label: 'Round of 14 – Match 2', round: 'R14', date: '2026-11-03', time: '4:15 PM', venue: 'CB', home: T('KCC', '1st, Group 3'), away: T('LHYMSS', '2nd, Group 1') },
-  { id: 'R3', label: 'Round of 14 – Match 3', round: 'R14', date: '2026-11-03', time: '3:00 PM', venue: 'HV', home: T('SJA', '2nd, Group 6'), away: T('ISS', '1st, Group 7') },
-  { id: 'R4', label: 'Round of 14 – Match 4', round: 'R14', date: '2026-11-03', time: '4:15 PM', venue: 'HV', home: T('KWSC', '1st, Group 6'), away: T('CFSS', '2nd, Group 3') },
-  { id: 'R5', label: 'Round of 14 – Match 5', round: 'R14', date: '2026-11-04', time: '3:00 PM', venue: 'AB', home: T('HW', '1st, Group 4'), away: T('SKHTSK', '2nd, Group 7') },
-  { id: 'R6', label: 'Round of 14 – Match 6', round: 'R14', date: '2026-11-04', time: '4:15 PM', venue: 'AB', home: T('HKUGA', '1st, Group 1'), away: T('SPCC', '2nd, Group 2') },
-  { id: 'Q1', label: 'Quarter-final 1', round: 'QF', date: '2026-11-07', time: '1:30 PM', venue: 'HV', home: T('SKHLMC', '1st, Group 2 – bye'), away: W('R1') },
-  { id: 'Q2', label: 'Quarter-final 2', round: 'QF', date: '2026-11-07', time: '2:45 PM', venue: 'HV', home: W('R2'), away: W('R3') },
-  { id: 'Q3', label: 'Quarter-final 3', round: 'QF', date: '2026-11-08', time: '9:30 AM', venue: 'HV', home: W('R4'), away: W('R5') },
-  { id: 'Q4', label: 'Quarter-final 4', round: 'QF', date: '2026-11-10', time: '3:00 PM', venue: 'HV', home: W('R6'), away: T('CANADIAN', '1st, Group 5 – bye') },
-  { id: 'S1', label: 'Semi-final 1', round: 'SF', date: '2026-11-18', time: '3:00 PM', venue: 'AB', home: W('Q1'), away: W('Q2') },
-  { id: 'S2', label: 'Semi-final 2', round: 'SF', date: '2026-11-18', time: '3:00 PM', venue: 'SKP', home: W('Q3'), away: W('Q4') },
-  { id: 'TP', label: 'Third-place play-off', round: 'TP', date: '2026-12-02', time: '3:00 PM', venue: 'AB', home: L('S1'), away: L('S2') },
-  { id: 'F', label: 'Final', round: 'F', date: '2026-12-07', time: '2:15 PM', venue: 'KT', home: W('S1'), away: W('S2') },
-]
-
-// Apply recorded results (see results.ts)
-for (const m of KO_MATCHES) {
-  const r = KO_RESULTS[m.id]
-  if (r) {
-    m.score = r.score
-    m.pens = r.pens
-    m.winnerTeam = r.winner
-    m.scoreTbc = r.scoreTbc
+  // Head-to-head mini-table among the teams tied on points
+  const mini = (tied: Set<string>) => {
+    const table = new Map<string, { pts: number; gd: number; gf: number }>([...tied].map((t) => [t, { pts: 0, gd: 0, gf: 0 }]))
+    for (const m of played) {
+      if (!tied.has(m.home) || !tied.has(m.away) || m.hs === null || m.as === null) continue
+      const h = table.get(m.home)!, a = table.get(m.away)!
+      h.gf += m.hs; a.gf += m.as; h.gd += m.hs - m.as; a.gd += m.as - m.hs
+      if (m.hs > m.as) h.pts += 3
+      else if (m.hs < m.as) a.pts += 3
+      else { h.pts++; a.pts++ }
+    }
+    return table
   }
+  const byPoints = new Map<number, Standing[]>()
+  rows.forEach((r) => byPoints.set(r.pts, [...(byPoints.get(r.pts) ?? []), r]))
+  const ordered: Standing[] = []
+  for (const pts of [...byPoints.keys()].sort((a, b) => b - a)) {
+    const tied = byPoints.get(pts)!
+    const table = tied.length > 1 ? mini(new Set(tied.map((t) => t.team))) : null
+    tied.sort((x, y) => {
+      if (table) {
+        const a = table.get(x.team)!, b = table.get(y.team)!
+        if (b.pts !== a.pts) return b.pts - a.pts
+        if (b.gd !== a.gd) return b.gd - a.gd
+        if (b.gf !== a.gf) return b.gf - a.gf
+      }
+      return y.gd - x.gd || y.gf - x.gf || x.team.localeCompare(y.team)
+    })
+    ordered.push(...tied)
+  }
+  return ordered
+}
+
+/** True when every fixture in the group that can still be played has a result (cancelled and withdrawn games excluded). */
+export function groupComplete(group: number): boolean {
+  return GROUP_MATCHES.filter((m) => m.group === group && !WITHDRAWN[m.home] && !WITHDRAWN[m.away] && m.remark !== 'C').every(
+    (m) => m.hs !== null,
+  )
 }
 
 export const koById = (id: string) => KO_MATCHES.find((m) => m.id === id)!
@@ -278,16 +328,28 @@ export function koLoser(m: KoMatch): string | null {
 /** Resolved team name for a slot, or null if not yet determined. */
 export function slotTeam(s: Slot): string | null {
   if (s.kind === 'team') return s.team
+  if (s.kind === 'pending') return null
   const src = koById(s.of)
   return s.kind === 'winner' ? koWinner(src) : koLoser(src)
 }
+
+/** Short name of a match for use in labels, e.g. "R14-3", "Q1" or "S2". */
+export function matchShort(m: KoMatch): string {
+  if (m.round === 'R14') {
+    const n = /(\d+)/.exec(ROUND_NAME.R14)?.[1]
+    return n ? `R${n}-${m.id.slice(1)}` : m.label
+  }
+  return m.id
+}
+
 export function slotText(s: Slot): string {
   const t = slotTeam(s)
   if (t) return t
   if (s.kind === 'team') return s.team
+  if (s.kind === 'pending') return s.seed.replace(' – bye', '')
   const src = koById(s.of)
   const verb = s.kind === 'winner' ? 'Winner' : 'Loser'
-  return `${verb} of ${src.round === 'R14' ? 'R14-' + s.of.slice(1) : s.of}`
+  return `${verb} of ${matchShort(src)}`
 }
 
 export function fmtDate(iso: string, long = false) {
@@ -296,7 +358,3 @@ export function fmtDate(iso: string, long = false) {
     ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
     : { weekday: 'short', day: 'numeric', month: 'short' })
 }
-
-export const ALL_KO_TEAMS = new Set(
-  KO_MATCHES.flatMap((m) => [m.home, m.away]).filter((s) => s.kind === 'team').map((s) => (s as { team: string }).team),
-)

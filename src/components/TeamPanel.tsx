@@ -1,6 +1,6 @@
 import { useDialog } from '../lib/hooks'
 import { type ReactNode } from 'react'
-import { ALL_KO_TEAMS, GROUP_MATCHES, KO_MATCHES, ROUND_NAME, VENUES, VENUE_SHORT, WITHDRAWN, fmtDate, koById, koPlayed, koWinner, slotTeam, standings, timeMinutes, type GroupMatch, type KoMatch, type Slot } from '../lib/data'
+import { ALL_KO_TEAMS, GROUP_MATCHES, KO_MATCHES, ROUND_NAME, VENUES, VENUE_SHORT, WITHDRAWN, fmtDate, koById, koPlayed, koWinner, slotTeam, slotText, standings, timeMinutes, type GroupMatch, type KoMatch, type Slot } from '../lib/data'
 import { TeamBtn, describeSource, remarkText } from './shared'
 import { groupPlaceText } from '../lib/stats'
 import { TBC_REMARK, beatLine } from '../lib/matchText'
@@ -124,7 +124,7 @@ export function TeamPanel({ team, onClose, onTeam }: { team: string; onClose: ()
 export function KoLine({ m, team, onTeam }: { m: KoMatch; team: string; onTeam: (t: string) => void }) {
   const h = slotTeam(m.home), a = slotTeam(m.away)
   const candidates = (slot: Slot) => {
-    if (slot.kind === 'team' || slotTeam(slot)) return null
+    if (slot.kind === 'team' || slot.kind === 'pending' || slotTeam(slot)) return null
     const source = koById(slot.of)
     const first = slotTeam(source.home), second = slotTeam(source.away)
     return first && second ? [first, second] : null
@@ -133,7 +133,7 @@ export function KoLine({ m, team, onTeam }: { m: KoMatch; team: string; onTeam: 
     const source = koById(slot.of)
     const verb = slot.kind === 'winner' ? 'Winner of' : 'Loser of'
     return source.round === 'R14'
-      ? [`${verb} Round of 14`, source.label.split(' – ')[1]]
+      ? [`${verb} ${ROUND_NAME.R14}`, source.label.split(' – ')[1]]
       : [verb, source.label]
   }
   const teamName = (name: string, className = '') =>
@@ -173,6 +173,7 @@ export function KoLine({ m, team, onTeam }: { m: KoMatch; team: string; onTeam: 
         </div>
       )
       if (slot.kind === 'team' && slot.seed.endsWith(' – bye')) caption = ['BYE']
+      else if (slot.kind === 'pending') caption = ['Qualifies as', slotText(slot)]
       else if (slot.kind !== 'team') {
         const source = beatLine(koById(slot.of))
         caption = source ? [...sourceLines(slot), source] : sourceLines(slot)

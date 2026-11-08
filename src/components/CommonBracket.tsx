@@ -148,12 +148,12 @@ export function CommonBracket({ run }: { run: SimulationRun }) {
       <BracketViewport zoom={zoom}>
         {BYES.map((bye) => (
           <div
-            key={bye.name}
+            key={bye.to + bye.slot}
             className="liquid absolute flex flex-col justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3"
             style={{ left: colX(0), top: bye.y - BYE_H / 2, width: CARD_W, height: BYE_H }}
           >
             <div className="flex items-center justify-between">
-              <span className="text-base font-semibold">{bye.name}</span>
+              <span className="text-base font-semibold">{bye.pending ? bye.seed : bye.name}</span>
               <span className="rounded bg-emerald-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                 Bye
               </span>

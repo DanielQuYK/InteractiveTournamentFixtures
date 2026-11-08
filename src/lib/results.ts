@@ -1,5 +1,6 @@
 /**
- * Knockout results — the single place to record scores as the final round is played.
+ * Knockout results — the single place to record scores as each division's final round is played.
+ * Add entries to the division's object below (D3H_RESULTS for Division Three, HK Island).
  *
  * Keys are match ids:
  *   R1–R6  Round of 14      Q1–Q4  Quarter-finals
@@ -24,7 +25,10 @@ export interface KoResult {
   scoreTbc?: boolean
 }
 
-export const KO_RESULTS: Record<string, KoResult> = {
+/** Results for each division, keyed by division id. Division Three (HK Island) is the only one with knockout results so far. */
+export const NO_RESULTS: Record<string, KoResult> = {}
+
+export const D3H_RESULTS: Record<string, KoResult> = {
   R1: { score: [4, 1] }, // IKTMC 4–1 QC
   R2: { score: [3, 0] }, // KCC 3–0 LHYMSS
   R3: { score: [0, 2] }, // SJA 0–2 ISS

@@ -30,6 +30,7 @@ export function describeSource(s: Slot): string {
   const t = slotTeam(s)
   if (t) return t
   if (s.kind === 'team') return s.team
+  if (s.kind === 'pending') return s.seed
   const src = koById(s.of)
   const a = slotTeam(src.home) ?? slotText(src.home)
   const b = slotTeam(src.away) ?? slotText(src.away)

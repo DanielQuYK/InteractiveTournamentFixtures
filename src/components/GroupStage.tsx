@@ -1,7 +1,7 @@
 import { usePersistentState } from '../lib/hooks'
 import { activateOnKey } from '../lib/hooks'
 import { useMemo, useState } from 'react'
-import { GROUPS, GROUP_MATCHES, PENALTIES, REMARKS, VENUE_SHORT, WITHDRAWN, fmtDate, standings, timeMinutes } from '../lib/data'
+import { GROUPS, GROUP_MATCHES, PENALTIES, activeDivision, REMARKS, VENUE_SHORT, WITHDRAWN, fmtDate, standings, timeMinutes } from '../lib/data'
 import { type Detail, DataNotice, TeamBtn, remarkText } from './shared'
 import { penaltyNotes, tieNotes, validateQualifiers } from '../lib/validation'
 
@@ -31,10 +31,22 @@ export function GroupStage({ onTeam, onMatch }: { onTeam: (t: string) => void; o
       <div className="glass-surface mb-8 rounded-lg border border-stone-200 bg-white p-4 text-sm text-stone-600">
         <p className="font-medium text-stone-800">Notes</p>
         <ul className="mt-1.5 list-disc space-y-1 pl-5">
-          <li>The top two teams in each group (shaded) advance to the final round. Ranking: points, goal difference, goals scored.</li>
+          <li>
+            The top two teams in each group (shaded) advance to the final round
+            {activeDivision().lineupConfirmed ? '' : '; until the organisers announce the line-up the shading shows the current top two only'}.
+            Ranking: points, then results between teams level on points, goal difference and goals scored.
+          </li>
           <li>Remarks: {Object.entries(REMARKS).map(([k, v]) => `${k} = ${v}`).join('; ')}.</li>
-          <li>CCHK (Group 2) withdrew on 22 September 2026; their fixtures are recorded as cancelled and are excluded from the standings.</li>
-          <li>ISFA (Group 2) were disqualified from the fixture against SKHLMC (recorded 0–3) and a deduction of 3 points applies.</li>
+          {Object.entries(WITHDRAWN).map(([team, note]) => (
+            <li key={team}>
+              {team} (Group {GROUP_MATCHES.find((m) => m.home === team || m.away === team)?.group}): {note.charAt(0).toLowerCase() + note.slice(1)}; their fixtures are recorded as cancelled and are excluded from the standings.
+            </li>
+          ))}
+          {Object.entries(PENALTIES).map(([team, pts]) => (
+            <li key={team}>
+              {team} (Group {GROUP_MATCHES.find((m) => m.home === team || m.away === team)?.group}) were disqualified from a fixture and a deduction of {pts} points applies.
+            </li>
+          ))}
         </ul>
       </div>
 

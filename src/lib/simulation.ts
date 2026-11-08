@@ -1,7 +1,10 @@
 import { DEFAULT_PARAMS, sanitizeOverrides, sanitizeParams, type ModelParams, type RatingOverrides } from "./modelParams"
+import { liveArray, liveRecord } from "./live"
 import {
   GROUP_MATCHES,
   KO_MATCHES,
+  ROUND_NAME,
+  perDivision,
   koPlayed,
   koById,
   koWinner,
@@ -35,23 +38,17 @@ export const emptyAggregate = (team: string): SimAggregate => ({
   finishes: { r14: 0, qf: 0, fourth: 0, third: 0, runnerUp: 0, champion: 0 },
 })
 
-/** Matches in the order they are played inside one simulation. */
-export const MATCH_ORDER = [
-  "R1",
-  "R2",
-  "R3",
-  "R4",
-  "R5",
-  "R6",
-  "Q1",
-  "Q2",
-  "Q3",
-  "Q4",
-  "S1",
-  "S2",
-  "TP",
-  "F",
-] as const
+const ROUND_RANK: Record<string, number> = { R14: 0, QF: 1, SF: 2, TP: 3, F: 4 }
+
+const matchOrder = perDivision(() =>
+  KO_MATCHES.filter((m) => m.round !== "PO")
+    .map((m, i) => ({ id: m.id, round: ROUND_RANK[m.round], i }))
+    .sort((a, b) => a.round - b.round || a.i - b.i)
+    .map((m) => m.id),
+)
+
+/** Matches of the active division's title bracket in the order they are played inside one simulation. */
+export const MATCH_ORDER: string[] = liveArray(matchOrder)
 
 /** How often one exact set of 14 match winners occurred, plus summed winning margins per match. */
 export interface BracketRecord {
@@ -70,7 +67,8 @@ export function bracketParticipants(winners: string[]): [string, string][] {
   const result: [string, string][] = []
   const resolve = (slot: Slot): string => {
     if (slot.kind === "team") return slot.team
-    const index = MATCH_ORDER.indexOf(slot.of as typeof MATCH_ORDER[number])
+    if (slot.kind === "pending") return ""
+    const index = MATCH_ORDER.indexOf(slot.of)
     const winner = winners[index]
     if (slot.kind === "winner") return winner
     const [a, b] = result[index]
@@ -103,8 +101,10 @@ export type MatchupTally = Map<string, MatchupRecord>
 /** Which stage a run starts simulating from; earlier rounds use official results. */
 export type StartStage = "R14" | "QF" | "SF" | "F"
 
-const STAGE_ORDER: StartStage[] = ["R14", "QF", "SF", "F"]
+const ALL_STAGES: StartStage[] = ["R14", "QF", "SF", "F"]
 const ROUND_INDEX: Record<string, number> = { R14: 0, QF: 1, SF: 2, TP: 3, F: 3 }
+/** Stages this division can start from: its first round onwards. */
+const activeStages = perDivision(() => ALL_STAGES.filter((s) => s === "F" || KO_MATCHES.some((m) => m.round === s)))
 
 /** Goals assumed for a level match whose exact scoreline is still to be confirmed. */
 const PROVISIONAL_LEVEL_GOALS = 1
@@ -120,12 +120,8 @@ export interface StartStageOption {
   fixedMatches: number
 }
 
-const STAGE_LABEL: Record<StartStage, string> = {
-  R14: "Round of 14",
-  QF: "Quarter-finals",
-  SF: "Semi-finals",
-  F: "Final and third place",
-}
+const stageLabel = (stage: StartStage) =>
+  ({ R14: ROUND_NAME.R14, QF: "Quarter-finals", SF: "Semi-finals", F: "Final and third place" })[stage]
 
 /**
  * Confirmed results available when a run begins at `stage`.
@@ -133,23 +129,27 @@ const STAGE_LABEL: Record<StartStage, string> = {
  * all completed earlier matches and any completed matches within that stage.
  */
 export function fixedMatchIds(stage: StartStage): Set<string> {
-  const cut = STAGE_ORDER.indexOf(stage)
-  if (cut === 0) return new Set()
+  const cut = ROUND_INDEX[stage]
+  if (stage === activeStages()[0]) return new Set()
   return new Set(
-    KO_MATCHES.filter((m) => ROUND_INDEX[m.round] <= cut && koPlayed(m)).map((m) => m.id),
+    KO_MATCHES.filter((m) => m.round !== "PO" && ROUND_INDEX[m.round] <= cut && koPlayed(m)).map((m) => m.id),
   )
 }
 
+export const startStages = (): StartStage[] => activeStages()
+
 export function startStageOptions(): StartStageOption[] {
-  const options = STAGE_ORDER.map((stage, cut) => {
-    const earlier = KO_MATCHES.filter((m) => ROUND_INDEX[m.round] < cut)
+  const options = activeStages().map((stage) => {
+    const cut = ROUND_INDEX[stage]
+    const first = stage === activeStages()[0]
+    const earlier = KO_MATCHES.filter((m) => m.round !== "PO" && ROUND_INDEX[m.round] < cut)
     const enabled = earlier.every((m) => koPlayed(m))
     const fixed = fixedMatchIds(stage)
     return {
       stage,
-      label: `From the ${STAGE_LABEL[stage]}`,
+      label: `From the ${stageLabel(stage)}`,
       description:
-        cut === 0
+        first
           ? "Pretend no knockout match has been played; every match is simulated."
           : enabled
             ? `Uses ${fixed.size} completed results available at this stage as fixed and simulates the rest.`
@@ -166,7 +166,7 @@ export function startStageOptions(): StartStageOption[] {
 
 /** The latest stage whose earlier rounds are all complete, the default for a new run. */
 export const latestStartStage = (): StartStage =>
-  startStageOptions().find((o) => o.recommended)?.stage ?? "R14"
+  startStageOptions().find((o) => o.recommended)?.stage ?? activeStages()[0]
 
 /** An official score, or a provisional level score when only the winner is confirmed. */
 export function officialScore(m: (typeof KO_MATCHES)[number]): [number, number] | null {
@@ -224,18 +224,22 @@ export interface SimMatchResult {
   loser: string
 }
 
-export const FINISHES: {
-  key: FinishKey
-  short: string
-  full: string
-}[] = [
-  { key: "r14", short: "R14", full: "Round of 14" },
-  { key: "qf", short: "QF", full: "Quarter-final" },
-  { key: "fourth", short: "4th", full: "Fourth place" },
-  { key: "third", short: "3rd", full: "Third place" },
-  { key: "runnerUp", short: "2nd", full: "Runner-up" },
-  { key: "champion", short: "1st", full: "Champion" },
-]
+const finishList = perDivision(() => {
+  const has = (r: string) => KO_MATCHES.some((m) => m.round === r)
+  const first = /(\d+)/.exec(ROUND_NAME.R14)?.[1]
+  const all: { key: FinishKey; short: string; full: string; applies: boolean }[] = [
+    { key: "r14", short: first ? `R${first}` : "R1", full: ROUND_NAME.R14, applies: has("R14") },
+    { key: "qf", short: "QF", full: "Quarter-final", applies: has("QF") },
+    { key: "fourth", short: "4th", full: "Fourth place", applies: true },
+    { key: "third", short: "3rd", full: "Third place", applies: true },
+    { key: "runnerUp", short: "2nd", full: "Runner-up", applies: true },
+    { key: "champion", short: "1st", full: "Champion", applies: true },
+  ]
+  return all.filter((f) => f.applies).map(({ key, short, full }) => ({ key, short, full }))
+})
+
+/** Finishing positions that exist in the active division's bracket. */
+export const FINISHES: { key: FinishKey; short: string; full: string }[] = liveArray(finishList)
 
 export function poisson(lambda: number) {
   const limit = Math.exp(-lambda)
@@ -532,36 +536,27 @@ export function runOneSimulation(
     return result
   }
 
-  const r1 = play("R1", "IKTMC", "QC")
-  finish(r1.loser, "r14")
-  const r2 = play("R2", "KCC", "LHYMSS")
-  finish(r2.loser, "r14")
-  const r3 = play("R3", "SJA", "ISS")
-  finish(r3.loser, "r14")
-  const r4 = play("R4", "KWSC", "CFSS")
-  finish(r4.loser, "r14")
-  const r5 = play("R5", "HW", "SKHTSK")
-  finish(r5.loser, "r14")
-  const r6 = play("R6", "HKUGA", "SPCC")
-  finish(r6.loser, "r14")
-
-  const q1 = play("Q1", "SKHLMC", r1.winner)
-  finish(q1.loser, "qf")
-  const q2 = play("Q2", r2.winner, r3.winner)
-  finish(q2.loser, "qf")
-  const q3 = play("Q3", r4.winner, r5.winner)
-  finish(q3.loser, "qf")
-  const q4 = play("Q4", r6.winner, "CANADIAN")
-  finish(q4.loser, "qf")
-
-  const s1 = play("S1", q1.winner, q2.winner)
-  const s2 = play("S2", q3.winner, q4.winner)
-  const third = play("TP", s1.loser, s2.loser)
-  finish(third.loser, "fourth")
-  finish(third.winner, "third")
-  const final = play("F", s1.winner, s2.winner)
-  finish(final.loser, "runnerUp")
-  finish(final.winner, "champion")
+  const results = new Map<string, SimMatchResult>()
+  const resolve = (slot: Slot): string => {
+    if (slot.kind === "team") return slot.team
+    if (slot.kind === "pending") throw new Error("The knockout line-up has not been confirmed, so it cannot be simulated.")
+    const source = results.get(slot.of)!
+    return slot.kind === "winner" ? source.winner : source.loser
+  }
+  for (const id of MATCH_ORDER) {
+    const match = koById(id)
+    const result = play(id, resolve(match.home), resolve(match.away))
+    results.set(id, result)
+    if (match.round === "R14") finish(result.loser, "r14")
+    else if (match.round === "QF") finish(result.loser, "qf")
+    else if (match.round === "TP") {
+      finish(result.loser, "fourth")
+      finish(result.winner, "third")
+    } else if (match.round === "F") {
+      finish(result.loser, "runnerUp")
+      finish(result.winner, "champion")
+    }
+  }
 
   for (const [team, t] of tally)
     aggregate.get(team)!.winRateSum += t.won / t.played
@@ -598,7 +593,7 @@ export interface SimMetric {
   value: (r: SimAggregate, runs: number) => number
 }
 
-export const SIM_METRICS: SimMetric[] = [
+const simMetrics = perDivision((): SimMetric[] => [
   {
     key: "wins",
     short: "Wins / sim",
@@ -643,7 +638,7 @@ export const SIM_METRICS: SimMetric[] = [
     unit: "signed",
     value: (r, n) => (r.gf - r.ga) / n,
   },
-  ...FINISHES.map(
+  ...finishList().map(
     (f): SimMetric => ({
       key: f.key,
       short: f.short,
@@ -653,7 +648,9 @@ export const SIM_METRICS: SimMetric[] = [
       value: (r, n) => (r.finishes[f.key] / n) * 100,
     }),
   ),
-]
+])
+
+export const SIM_METRICS: SimMetric[] = liveArray(simMetrics)
 
 export function formatMetric(metric: SimMetric, v: number) {
   if (metric.unit === "percent") return `${v.toFixed(1)}%`
@@ -677,14 +674,16 @@ export function marginOfError(hits: number, runs: number) {
 }
 
 /** Number of teams that finish in each position in one simulation. */
-export const FINISH_SLOTS: Record<FinishKey, number> = {
-  r14: 6,
-  qf: 4,
-  fourth: 1,
-  third: 1,
-  runnerUp: 1,
-  champion: 1,
-}
+export const FINISH_SLOTS: Record<FinishKey, number> = liveRecord(
+  perDivision(() => ({
+    r14: KO_MATCHES.filter((m) => m.round === "R14").length,
+    qf: KO_MATCHES.filter((m) => m.round === "QF").length,
+    fourth: 1,
+    third: 1,
+    runnerUp: 1,
+    champion: 1,
+  })),
+) as Record<FinishKey, number>
 
 /** Actual Wilson bounds (asymmetric at 0%/100%), in percentage points. */
 export function probabilityInterval(hits: number, runs: number) {

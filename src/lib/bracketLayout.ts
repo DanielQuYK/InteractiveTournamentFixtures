@@ -1,4 +1,5 @@
-import { koById, KO_MATCHES } from "./data"
+import { KO_MATCHES, ROUND_NAME, koById, perDivision, type KoMatch } from "./data"
+import { liveArray, liveRecord } from "./live"
 
 /* ---------- Bracket geometry shared by the Knockout and Simulation tabs ---------- */
 
@@ -10,32 +11,92 @@ export const OFF = 12 // compact gap between round headings and the first bye ca
 export const EDGE_PAD = 28
 export const colX = (c: number) => EDGE_PAD + c * (CARD_W + GAP)
 export const BYE_H = 84
-export const TOTAL_W = colX(3) + CARD_W + EDGE_PAD
-export const TOTAL_H = 8 * U + OFF + 20
 
-export function layout() {
-  const pos: Record<string, { x: number; y: number }> = {}
-  const leafY = (k: number) => k * U + U / 2 + OFF
-  ;(["R1", "R2", "R3", "R4", "R5", "R6"] as const).forEach((id, i) => {
-    pos[id] = { x: colX(0), y: leafY(i + 1) }
-  })
-  const mid = (a: number, b: number) => (a + b) / 2
-  pos.Q1 = { x: colX(1), y: mid(leafY(0), pos.R1.y) }
-  pos.Q2 = { x: colX(1), y: mid(pos.R2.y, pos.R3.y) }
-  pos.Q3 = { x: colX(1), y: mid(pos.R4.y, pos.R5.y) }
-  pos.Q4 = { x: colX(1), y: mid(pos.R6.y, leafY(7)) }
-  pos.S1 = { x: colX(2), y: mid(pos.Q1.y, pos.Q2.y) }
-  pos.S2 = { x: colX(2), y: mid(pos.Q3.y, pos.Q4.y) }
-  pos.F = { x: colX(3), y: mid(pos.S1.y, pos.S2.y) }
-  pos.TP = { x: colX(3), y: pos.F.y + U * 1.3 }
-  return { pos, byeTop: leafY(0), byeBottom: leafY(7) }
+type Round = "R14" | "QF" | "SF" | "F"
+const ROUNDS: Round[] = ["R14", "QF", "SF", "F"]
+
+interface Bye {
+  y: number
+  to: string
+  name: string
+  seed: string
+  pending: boolean
+  slot: "home" | "away"
 }
-export const { pos: POS, byeTop, byeBottom } = layout()
 
-export const BYES = [
-  { y: byeTop, to: "Q1", name: "SKHLMC", seed: "1st, Group 2" },
-  { y: byeBottom, to: "Q4", name: "CANADIAN", seed: "1st, Group 5" },
-]
+interface Layout {
+  pos: Record<string, { x: number; y: number }>
+  byes: Bye[]
+  rounds: Round[]
+  width: number
+  height: number
+}
+
+/**
+ * Derives the bracket geometry from how the matches feed each other, so a 4, 8 or 12-team
+ * bracket (with or without byes) is laid out by the same rules. A match with no feeder is a leaf;
+ * a seeded place in a match that also has a feeder is a bye drawn one column to the left.
+ */
+const layoutFor = perDivision((): Layout => {
+  const tree = KO_MATCHES.filter((m) => m.round !== "TP" && m.round !== "PO")
+  const rounds = ROUNDS.filter((r) => r === "F" || tree.some((m) => m.round === r))
+  const col = (m: KoMatch) => rounds.indexOf(m.round as Round)
+  const pos: Layout["pos"] = {}
+  const byes: Bye[] = []
+  let leaf = 0
+  const leafY = () => leaf++ * U + U / 2 + OFF
+  const place = (m: KoMatch): number => {
+    const feeders = [m.home, m.away].map((s) => (s.kind === "winner" ? koById(s.of) : null))
+    let y: number
+    if (!feeders[0] && !feeders[1]) {
+      y = leafY()
+    } else {
+      const ys = (["home", "away"] as const).map((side, i) => {
+        const f = feeders[i]
+        if (f) return place(f)
+        const slot = m[side]
+        const by = leafY()
+        byes.push({
+          y: by,
+          to: m.id,
+          name: slot.kind === "team" ? slot.team : "",
+          seed: slot.kind === "team" || slot.kind === "pending" ? slot.seed.replace(" – bye", "") : "",
+          pending: slot.kind !== "team",
+          slot: side,
+        })
+        return by
+      })
+      y = (ys[0] + ys[1]) / 2
+    }
+    pos[m.id] = { x: colX(col(m)), y }
+    return y
+  }
+  place(koById("F"))
+  const final = pos.F
+  const tp = KO_MATCHES.find((m) => m.round === "TP")
+  let bottom = Math.max(...Object.values(pos).map((p) => p.y))
+  if (tp) {
+    pos[tp.id] = { x: final.x, y: final.y + U * 1.3 }
+    bottom = Math.max(bottom, pos[tp.id].y)
+  }
+  const po = KO_MATCHES.find((m) => m.round === "PO")
+  if (po) {
+    pos[po.id] = { x: final.x, y: (tp ? pos[tp.id].y : final.y) + U * 1.3 }
+    bottom = Math.max(bottom, pos[po.id].y)
+  }
+  return {
+    pos,
+    byes,
+    rounds,
+    width: colX(rounds.length - 1) + CARD_W + EDGE_PAD,
+    height: Math.max(leaf * U + OFF + 20, bottom + CARD_H / 2 + 44),
+  }
+})
+
+export const POS: Record<string, { x: number; y: number }> = liveRecord(() => layoutFor().pos)
+export const BYES: Bye[] = liveArray(() => layoutFor().byes)
+export const totalW = () => layoutFor().width
+export const totalH = () => layoutFor().height
 
 /** Connector paths shared by the knockout bracket and the simulated bracket. */
 export function bracketLines() {
@@ -48,22 +109,12 @@ export function bracketLines() {
     const mx = x1 + GAP / 2 + inset
     lines.push({ d: `M${x1},${a.y} H${mx} V${b.y} H${x2}`, dashed })
   }
-  ;[
-    ["R1", "Q1"],
-    ["R2", "Q2"],
-    ["R3", "Q2"],
-    ["R4", "Q3"],
-    ["R5", "Q3"],
-    ["R6", "Q4"],
-    ["Q1", "S1"],
-    ["Q2", "S1"],
-    ["Q3", "S2"],
-    ["Q4", "S2"],
-    ["S1", "F"],
-    ["S2", "F"],
-  ].forEach(([a, b]) => link(a, b))
-  link("S1", "TP", true, 14)
-  link("S2", "TP", true, 14)
+  for (const m of KO_MATCHES) {
+    for (const s of [m.home, m.away]) {
+      if (s.kind === "winner") link(s.of, m.id)
+      else if (s.kind === "loser") link(s.of, m.id, true, 14)
+    }
+  }
   for (const b of BYES) {
     const t = POS[b.to]
     const right = colX(0) + CARD_W
@@ -72,22 +123,23 @@ export function bracketLines() {
   return lines
 }
 
-export const TAG: Record<string, string> = {
-  R1: "Round of 14 · Match 1",
-  R2: "Round of 14 · Match 2",
-  R3: "Round of 14 · Match 3",
-  R4: "Round of 14 · Match 4",
-  R5: "Round of 14 · Match 5",
-  R6: "Round of 14 · Match 6",
-  Q1: "Quarter-final 1",
-  Q2: "Quarter-final 2",
-  Q3: "Quarter-final 3",
-  Q4: "Quarter-final 4",
-  S1: "Semi-final 1",
-  S2: "Semi-final 2",
-  TP: "Third place",
-  F: "Final",
-}
+const tags = perDivision(() => {
+  const tag: Record<string, string> = {}
+  const count: Record<string, number> = {}
+  for (const m of KO_MATCHES) {
+    count[m.round] = (count[m.round] ?? 0) + 1
+    const n = count[m.round]
+    tag[m.id] =
+      m.round === "R14" ? `${ROUND_NAME.R14} · Match ${n}`
+      : m.round === "QF" ? `Quarter-final ${n}`
+      : m.round === "SF" ? `Semi-final ${n}`
+      : m.round === "TP" ? "Third place"
+      : m.round === "PO" ? "Group third-place play-off"
+      : "Final"
+  }
+  return tag
+})
+export const TAG: Record<string, string> = liveRecord(tags)
 
 export interface Rect {
   x: number
@@ -97,24 +149,28 @@ export interface Rect {
 }
 export type Focus = { kind: "all" } | {
   kind: "phase"
-  round: "R14" | "QF" | "SF" | "F"
+  round: Round
 } | { kind: "context"; id: string } | { kind: "match"; id: string }
 
-export const PHASES: { round: "R14" | "QF" | "SF" | "F"; label: string }[] = [
-  { round: "R14", label: "Round of 14" },
-  { round: "QF", label: "Quarter-finals" },
-  { round: "SF", label: "Semi-finals" },
-  { round: "F", label: "Final" },
-]
-export const PHASE_IDS: Record<string, string[]> = {
-  R14: ["R1", "R2", "R3", "R4", "R5", "R6"],
-  QF: ["Q1", "Q2", "Q3", "Q4"],
-  SF: ["S1", "S2"],
-  F: ["F", "TP"],
-}
-export const roundOf = (id: string): "R14" | "QF" | "SF" | "F" => {
+const phases = perDivision(() => {
+  const labels: Record<Round, string> = { R14: ROUND_NAME.R14, QF: "Quarter-finals", SF: "Semi-finals", F: "Final" }
+  return layoutFor().rounds.map((round) => ({ round, label: labels[round] }))
+})
+export const PHASES: { round: Round; label: string }[] = liveArray(phases)
+
+export const PHASE_IDS: Record<string, string[]> = liveRecord(
+  perDivision(() => {
+    const ids: Record<string, string[]> = {}
+    for (const m of KO_MATCHES) {
+      const key = m.round === "TP" || m.round === "PO" ? "F" : m.round
+      ;(ids[key] ??= []).push(m.id)
+    }
+    return ids
+  }),
+)
+export const roundOf = (id: string): Round => {
   const r = koById(id).round
-  return r === "TP" ? "F" : r
+  return r === "TP" || r === "PO" ? "F" : r
 }
 export const cardRect = (id: string): Rect => ({
   x: POS[id].x,
@@ -136,10 +192,10 @@ export function focusRect(f: Focus): Rect {
     w: r.w + 2 * p,
     h: r.h + 2 * p,
   })
-  if (f.kind === "all") return { x: 0, y: 0, w: TOTAL_W, h: TOTAL_H }
+  if (f.kind === "all") return { x: 0, y: 0, w: totalW(), h: totalH() }
   if (f.kind === "phase") {
     const r = union(PHASE_IDS[f.round].map(cardRect))
-    if (f.round === "R14") return pad({ x: r.x, y: 0, w: r.w, h: TOTAL_H }, 24)
+    if (f.round === PHASES[0].round) return pad({ x: r.x, y: 0, w: r.w, h: totalH() }, 24)
     return pad({ ...r, y: r.y - 28, h: r.h + 28 }, 24)
   }
   if (f.kind === "match") return pad(cardRect(f.id), 28)
@@ -163,8 +219,6 @@ export const focusLabel = (f: Focus) =>
         : `${TAG[f.id]} (match path)`
 
 
-const UPPER_HALF = new Set(['R1', 'R2', 'R3', 'Q1', 'Q2'])
-
 /** Which half of the bracket a team starts in; teams in the same half can only meet once. */
 export function bracketSide(team: string): 'upper' | 'lower' {
   const entry = KO_MATCHES.find(
@@ -172,5 +226,5 @@ export function bracketSide(team: string): 'upper' | 'lower' {
       (m.home.kind === 'team' && m.home.team === team) ||
       (m.away.kind === 'team' && m.away.team === team),
   )
-  return entry && UPPER_HALF.has(entry.id) ? 'upper' : 'lower'
+  return entry && entry.round !== 'PO' && POS[entry.id].y < POS.F.y ? 'upper' : 'lower'
 }

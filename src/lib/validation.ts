@@ -1,8 +1,8 @@
-import { GROUPS, KO_MATCHES, PENALTIES, slotTeam, standings, type Slot } from './data'
-import { KO_RESULTS } from './results'
+import { GROUPS, GROUP_MATCHES, KO_MATCHES, PENALTIES, activeDivision, groupComplete, slotTeam, standings, type Slot } from './data'
+import type { KoResult } from './results'
 
 /** Problems found in the knockout results entered in results.ts. */
-export function validateResults(results = KO_RESULTS): string[] {
+export function validateResults(results: Record<string, KoResult> = activeDivision().results): string[] {
   const issues: string[] = []
   for (const [id, r] of Object.entries(results)) {
     const m = KO_MATCHES.find((x) => x.id === id)
@@ -53,7 +53,9 @@ export function validateQualifiers(): string[] {
   }
   KO_MATCHES.forEach((m) => { check(m.home); check(m.away) })
   // Every group should send exactly its top two to the bracket.
+  if (!activeDivision().lineupConfirmed) return issues
   for (const g of GROUPS) {
+    if (!groupComplete(g)) continue
     const top = standings(g).slice(0, 2).map((r) => r.team)
     const inBracket = KO_MATCHES.flatMap((m) => [m.home, m.away])
       .filter((s) => s.kind === 'team' && new RegExp(`Group ${g}\\b`).test(s.seed))
@@ -70,7 +72,11 @@ export function tieNotes(group: number): string[] {
   for (let i = 0; i < table.length - 1; i++) {
     const a = table[i], b = table[i + 1]
     if (a.pts !== b.pts || i > 1) continue
-    const how = a.gd !== b.gd ? `goal difference (${fmt(a.gd)} v ${fmt(b.gd)})` : a.gf !== b.gf ? `goals scored (${a.gf} v ${b.gf})` : 'alphabetical order, as no further tie-breaker is defined'
+    const direct = GROUP_MATCHES.find(
+      (m) => m.group === group && m.hs !== null && m.hs !== m.as && ((m.home === a.team && m.away === b.team) || (m.home === b.team && m.away === a.team)),
+    )
+    const directWinner = direct ? (direct.hs! > direct.as! ? direct.home : direct.away) : null
+    const how = directWinner === a.team ? `their head-to-head result (${a.team} beat ${b.team} ${Math.max(direct!.hs!, direct!.as!)}–${Math.min(direct!.hs!, direct!.as!)})` : a.gd !== b.gd ? `goal difference (${fmt(a.gd)} v ${fmt(b.gd)})` : a.gf !== b.gf ? `goals scored (${a.gf} v ${b.gf})` : 'alphabetical order, as no further tie-breaker is defined'
     notes.push(`${a.team} and ${b.team} finished level on ${a.pts} points; ${a.team} is ranked ahead on ${how}.`)
   }
   return notes

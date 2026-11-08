@@ -1,14 +1,7 @@
-import { KO_MATCHES, koWinner, slotTeam } from "../lib/data"
+import { KO_MATCHES, ROUND_NAME, koWinner, slotTeam } from "../lib/data"
 import { TBC_REMARK } from "../lib/matchText"
 import { fixedMatchIds, type StartStage } from "../lib/simulation"
 
-const ROUND_LABEL: Record<string, string> = {
-  R14: "Round of 14",
-  QF: "Quarter-final",
-  SF: "Semi-final",
-  TP: "Third place",
-  F: "Final",
-}
 
 /** The official results a simulation treats as already played, with winners in green and losers in red. */
 export function AppliedResults({ stage }: { stage: StartStage }) {
@@ -35,7 +28,7 @@ export function AppliedResults({ stage }: { stage: StartStage }) {
           return (
             <li key={m.id} className="liquid overflow-hidden rounded-lg border border-stone-300 bg-white text-sm">
               <p className="bg-stone-100 px-3 py-1 text-[11px] font-medium text-stone-600">
-                {ROUND_LABEL[m.round]} · {m.label.split(" – ")[1] ?? m.label}
+                {ROUND_NAME[m.round]} · {m.label.split(" – ")[1] ?? m.label}
               </p>
               {sides.map((side) => {
                 const won = side.team === winner

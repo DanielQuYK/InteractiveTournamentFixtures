@@ -24,6 +24,7 @@ import {
   runOneSimulation,
   simulationStrengths,
   startStageOptions,
+  startStages,
 } from "../lib/simulation"
 
 /** Upper limit per run. Only compact aggregates are kept, so this affects time, not storage. */
@@ -199,7 +200,7 @@ export function Simulation() {
                     )}
                   </span>
                   <span className="mt-1 block text-xs text-stone-600">{option.description}</span>
-                  {option.enabled && option.stage !== "R14" && fixedWinners.length > 0 && (
+                  {option.enabled && option.stage !== startStages()[0] && fixedWinners.length > 0 && (
                     <span className="mt-1.5 block text-xs text-stone-700">Already through: {fixedWinners.join(", ")}</span>
                   )}
                 </button>
@@ -594,8 +595,7 @@ export function Simulation() {
                 This weight is a judgement, not a fitted value.
               </li>
               <li>
-                Finishing categories are mutually exclusive: Round of 14,
-                quarter-final, fourth, third, runner-up and champion.
+                Finishing categories are mutually exclusive: {FINISHES.map((f) => f.full.toLowerCase()).join(", ")}.
               </li>
             </ul>
             <div className="mt-5 space-y-3 border-t border-stone-200 pt-4 text-sm leading-relaxed text-stone-600">

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { VENUES, fmtDate, koById, koWinner, slotTeam } from "../lib/data"
-import { bracketSide } from "../lib/bracketLayout"
+import { TAG, bracketSide } from "../lib/bracketLayout"
 import { TBC_REMARK } from "../lib/matchText"
 import { GRID_SIZE } from "../lib/prediction"
 import { actualResult, pairPrediction, predictFixture } from "../lib/prediction"
@@ -17,22 +17,7 @@ import {
   type SimulationRun,
 } from "../lib/simulation"
 
-const STAGE_NAME: Record<string, string> = {
-  R1: "Round of 14 · Match 1",
-  R2: "Round of 14 · Match 2",
-  R3: "Round of 14 · Match 3",
-  R4: "Round of 14 · Match 4",
-  R5: "Round of 14 · Match 5",
-  R6: "Round of 14 · Match 6",
-  Q1: "Quarter-final 1",
-  Q2: "Quarter-final 2",
-  Q3: "Quarter-final 3",
-  Q4: "Quarter-final 4",
-  S1: "Semi-final 1",
-  S2: "Semi-final 2",
-  TP: "Third place",
-  F: "Final",
-}
+const STAGE_NAME = TAG
 
 const SMALL_SAMPLE = 30
 const MAX_ROWS = 8

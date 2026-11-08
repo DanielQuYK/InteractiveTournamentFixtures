@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { groupSeed } from "../lib/stats"
+import { BYES } from "../lib/bracketLayout"
 import {
   FINISHES,
   FINISH_SLOTS,
@@ -32,6 +33,7 @@ type Slice = {
 }
 
 export function SimulationCharts({ run }: { run: SimulationRun }) {
+  const byeTeams = BYES.filter((b) => !b.pending).map((b) => b.name)
   const [mode, setMode] = useState<"bar" | "team" | "position">("bar")
   const [metricKey, setMetricKey] = useState("champion")
   const [finishMode, setFinishMode] = useState<"exact" | "orBetter">("orBetter")
@@ -171,11 +173,10 @@ export function SimulationCharts({ run }: { run: SimulationRun }) {
             <strong>Exactly here</strong> counts simulations where this was the
             team’s terminal result.
             <strong className="ml-1">Here or better</strong> also includes every
-            higher finish. For example, quarter-final or better includes
-            quarter-final exits, fourth, third, runner-up and champion. Round of
-            14 or better is therefore 100% for every entered team, including
-            teams with byes; an exact Round of 14 exit remains 0% for SKHLMC and
-            CANADIAN.
+            higher finish. For example, {(FINISHES[1] ?? FINISHES[0]).full.toLowerCase()} or
+            better includes {(FINISHES[1] ?? FINISHES[0]).full.toLowerCase()} exits and every higher finish.{" "}
+            {FINISHES[0].full} or better is therefore 100% for every entered
+            team{byeTeams.length > 0 ? `, including teams with byes; an exact ${FINISHES[0].full} exit remains 0% for ${byeTeams.join(" and ")}` : ""}.
           </p>
         </div>
       )}

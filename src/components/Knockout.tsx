@@ -3,6 +3,8 @@ import { activateOnKey, usePrefersReducedMotion } from "../lib/hooks"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
   ALL_KO_TEAMS,
+  ROUND_NAME,
+  activeDivision,
   KO_MATCHES,
   VENUES,
   fmtDate,
@@ -215,6 +217,36 @@ export function KnockoutTeamSearch({
   )
 }
 
+function KnockoutIntro() {
+  const division = activeDivision()
+  const bracket = KO_MATCHES.filter((m) => m.round !== "TP" && m.round !== "PO")
+  const places = bracket.flatMap((m) => [m.home, m.away]).filter((x) => x.kind === "team" || x.kind === "pending").length
+  const first = bracket[0]
+  const firstRound = bracket.filter((m) => m.round === first.round).length
+  const byes = BYES.length
+  const byeNames = BYES.filter((b) => !b.pending).map((b) => b.name)
+  const playoff = KO_MATCHES.find((m) => m.round === "PO")
+  return (
+    <>
+      {!division.lineupConfirmed && (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900" role="note">
+          <strong>Knockout line-up not yet set.</strong> The organisers have published the dates and venues of the final round
+          but have not yet drawn which teams play where. Places are shown as group positions to be confirmed, and no team
+          names are assumed until the groups finish and the draw is released.
+        </p>
+      )}
+      <p>
+        {places} teams contest a single-elimination final round.
+        {byes > 0
+          ? ` ${byes} group winners${byeNames.length ? `, ${byeNames.join(" and ")},` : ""} receive a bye directly into the quarter-finals, so the first round is a ${ROUND_NAME.R14} (${places} → ${places - firstRound}).`
+          : ` The first round is the ${first.round === "R14" ? ROUND_NAME.R14 : ROUND_NAME[first.round].toLowerCase()}.`}{" "}
+        The first-named team is the home team. Dashed connectors lead to the third-place play-off between the two semi-final losers.
+        {playoff && " A separate play-off between the two group third-placed teams is shown below the third-place match; it does not affect the title bracket."}
+      </p>
+    </>
+  )
+}
+
 export function Knockout({
   onTeam,
   onMatch,
@@ -227,14 +259,8 @@ export function Knockout({
   return (
     <div>
       <DataNotice issues={resultIssues} title="Results check" />
-      <div className="mb-5 max-w-3xl text-sm text-stone-600">
-        <p>
-          Fourteen teams contest a single-elimination final round. Two group
-          winners, SKHLMC and CANADIAN, receive a bye directly into the
-          quarter-finals, so the first round is a Round of 14 (14 → 8). The
-          first-named team is the home team. Dashed connectors lead to the
-          third-place play-off between the two semi-final losers.
-        </p>
+      <div className="mb-5 max-w-3xl space-y-2 text-sm text-stone-600">
+        <KnockoutIntro />
       </div>
 
       <KnockoutTeamSearch
@@ -246,7 +272,7 @@ export function Knockout({
       <BracketViewport zoom={zoom}>
         {BYES.map((b) => (
           <div
-            key={b.name}
+            key={b.to + b.slot}
             className="liquid absolute rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3"
             style={{
               left: colX(0),
@@ -257,13 +283,17 @@ export function Knockout({
           >
             <div className="flex h-full flex-col justify-center">
               <div className="flex items-center justify-between">
-                <TeamBtn name={b.name} onTeam={onTeam} className="text-base" />
+                {b.pending ? (
+                  <span className="text-base font-semibold text-stone-700">{b.seed || "To be confirmed"}</span>
+                ) : (
+                  <TeamBtn name={b.name} onTeam={onTeam} className="text-base" />
+                )}
                 <span className="rounded bg-emerald-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                   Bye
                 </span>
               </div>
               <div className="mt-1 text-xs leading-snug text-stone-600">
-                {b.seed}
+                {b.pending ? "Team to be confirmed" : b.seed}
               </div>
               <div className="text-xs leading-snug text-stone-600">
                 Direct to quarter-final

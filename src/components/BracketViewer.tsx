@@ -3,8 +3,8 @@ import { usePersistentState, usePrefersReducedMotion } from "../lib/hooks"
 import {
   PHASES,
   PHASE_IDS,
-  TOTAL_H,
-  TOTAL_W,
+  totalH,
+  totalW,
   bracketLines,
   colX,
   focusLabel,
@@ -14,7 +14,6 @@ import {
 } from "../lib/bracketLayout"
 
 type Round = "R14" | "QF" | "SF" | "F"
-const LINES = bracketLines()
 
 /**
  * Zoom and pan engine shared by every bracket in the app: full bracket → phase →
@@ -22,7 +21,7 @@ const LINES = bracketLines()
  */
 export function useBracketZoom(storageKey: string) {
   const [focus, setFocus] = usePersistentState<Focus>(`${storageKey}-focus`, { kind: "all" })
-  const [lastRound, setLastRound] = usePersistentState<Round>(`${storageKey}-last-round`, "R14")
+  const [lastRound, setLastRound] = usePersistentState<Round>(`${storageKey}-last-round`, PHASES[0].round)
   const [size, setSize] = useState({ w: 1000, h: 640 })
   const vp = useRef<HTMLDivElement>(null)
   const reducedMotion = usePrefersReducedMotion()
@@ -40,7 +39,7 @@ export function useBracketZoom(storageKey: string) {
   // Fit the focus to the window within limits that keep text legible
   // (tall phases scroll rather than shrink).
   const fit = Math.min(size.w / rect.w, size.h / rect.h)
-  const fullScale = Math.min(size.w / TOTAL_W, 1)
+  const fullScale = Math.min(size.w / totalW(), 1)
   const scale =
     focus.kind === "all"
       ? fullScale
@@ -65,8 +64,8 @@ export function useBracketZoom(storageKey: string) {
     if (!el || !sizer || !canvas) return
     const render = (s: number, cx: number, cy: number) => {
       canvas.style.transform = `scale(${s})`
-      sizer.style.width = `${TOTAL_W * s}px`
-      sizer.style.height = `${TOTAL_H * s}px`
+      sizer.style.width = `${totalW() * s}px`
+      sizer.style.height = `${totalH() * s}px`
       el.scrollLeft = cx * s - el.clientWidth / 2
       el.scrollTop = cy * s - el.clientHeight / 2
       applied.current = s
@@ -250,11 +249,11 @@ export function BracketViewport({ zoom, children }: { zoom: BracketZoom; childre
     <div
       ref={vp}
       className="relative overflow-auto rounded-xl border border-stone-200 bg-white"
-      style={{ height: focus.kind === "all" ? TOTAL_H * scale : "min(72vh, 700px)" }}
+      style={{ height: focus.kind === "all" ? totalH() * scale : "min(72vh, 700px)" }}
     >
       {/* Width, height and scale of the two layers below are set by the zoom engine. */}
       <div ref={sizerRef}>
-        <div ref={canvasRef} className="relative origin-top-left" style={{ width: TOTAL_W, height: TOTAL_H }}>
+        <div ref={canvasRef} className="relative origin-top-left" style={{ width: totalW(), height: totalH() }}>
           {PHASES.map((p, c) => (
             <div
               key={p.round}
@@ -264,8 +263,8 @@ export function BracketViewport({ zoom, children }: { zoom: BracketZoom; childre
               {p.label}
             </div>
           ))}
-          <svg className="absolute inset-0" width={TOTAL_W} height={TOTAL_H} fill="none" aria-hidden="true">
-            {LINES.map((l, i) => (
+          <svg className="absolute inset-0" width={totalW()} height={totalH()} fill="none" aria-hidden="true">
+            {bracketLines().map((l, i) => (
               <path
                 key={i}
                 d={l.d}

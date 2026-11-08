@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
 import { useDialog } from '../lib/hooks'
-import { KO_MATCHES, ROUND_NAME, VENUES, VENUE_SHORT, fmtDate, koById, koPlayed, koWinner, slotTeam, type Slot } from '../lib/data'
+import { KO_MATCHES, activeDivision, ROUND_NAME, VENUES, VENUE_SHORT, fmtDate, koById, koPlayed, koWinner, slotTeam, slotText, type Slot } from '../lib/data'
 import { type Detail, TeamBtn, describeSource, remarkText } from './shared'
 import { groupPlaceText } from '../lib/stats'
 import { PredictionToggle } from './MatchPredictionPanel'
@@ -47,7 +47,7 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
     const next = KO_MATCHES.find((x) => (x.home.kind === 'winner' && x.home.of === m.id) || (x.away.kind === 'winner' && x.away.of === m.id))
     if (next) extra.push(`The winner advances to ${next.label} on ${fmtDate(next.date)}, ${next.time}, ${VENUE_SHORT[next.venue]}.`)
     if (m.round === 'SF') extra.push('The loser proceeds to the third-place play-off on 2 December 2026.')
-    if (m.round === 'F') extra.push('The winner is crowned champion of Division Three (HK) Boys A Grade.')
+    if (m.round === 'F') extra.push('The winner is crowned champion of ' + activeDivision().title + '.')
     if (m.round === 'TP') extra.push('Contested by the two losing semi-finalists.')
     if (!koPlayed(m)) extra.push('Knockout matches are decided on the day; the first-named team is the home team.')
   }
@@ -55,7 +55,7 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
   // Exactly two possible occupants: the feeder match has both teams confirmed
   // but has not been decided yet.
   const candidates = (slot: Slot | null): { teams: string[]; label: string } | null => {
-    if (!slot || slot.kind === 'team' || slotTeam(slot)) return null
+    if (!slot || slot.kind === 'team' || slot.kind === 'pending' || slotTeam(slot)) return null
     const src = koById(slot.of)
     const a = slotTeam(src.home), b = slotTeam(src.away)
     if (!a || !b) return null
@@ -65,7 +65,7 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
   const sourceLines = (slot: Slot & { kind: 'winner' | 'loser' }): string[] => {
     const src = koById(slot.of)
     const verb = slot.kind === 'winner' ? 'Winner of' : 'Loser of'
-    if (src.round === 'R14') return [`${verb} Round of 14`, src.label.split(' – ')[1]]
+    if (src.round === 'R14') return [`${verb} ${ROUND_NAME.R14}`, src.label.split(' – ')[1]]
     return [verb, src.label]
   }
 
@@ -99,6 +99,7 @@ export function MatchModal({ detail, onClose, onTeam }: { detail: Detail; onClos
       )
       if (slot && name) {
         if (slot.kind === 'team') caption = slot.seed.endsWith(' – bye') ? ['BYE'] : ['Qualified from', groupPlaceText(name)]
+        else if (slot.kind === 'pending') caption = ['Qualifies as', slotText(slot)]
         else {
           const source = beatLine(koById(slot.of))
           caption = source ? [...sourceLines(slot), source] : sourceLines(slot)
