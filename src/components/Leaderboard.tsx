@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { usePersistentState } from '../lib/hooks'
 import { activeDivision, ROUND_NAME } from '../lib/data'
 import { LEADERBOARD_METRICS, leaderboard, type LeaderRow, type LeaderboardMode } from '../lib/leaderboard'
@@ -17,14 +17,13 @@ function Cell({ t, sign = false, ko }: { t: { total: number; knockout: number };
   return (
     <>
       {fmt(t.total)}
-      {ko && t.knockout !== 0 || (ko && !sign && t.knockout === 0) ? (
-        <span className="ml-1 text-xs text-stone-500">({fmt(t.knockout)})</span>
-      ) : null}
+      {ko && <span className="ml-1 text-xs text-stone-500">({fmt(t.knockout)})</span>}
     </>
   )
 }
 
 export function Leaderboard({ onTeam }: { onTeam: (t: string) => void }) {
+  const [query, setQuery] = useState('')
   const [mode, setMode] = usePersistentState<LeaderboardMode>('leaderboard-mode', 'stage')
   const division = activeDivision()
   const board = useMemo(() => leaderboard(mode), [mode])
@@ -33,7 +32,9 @@ export function Leaderboard({ onTeam }: { onTeam: (t: string) => void }) {
 
   // Section headings appear whenever the tier changes
   const sections: { tier: string; rows: LeaderRow[] }[] = []
-  for (const r of board.rows) {
+  const needle = query.trim().toLowerCase()
+  const visible = needle ? board.rows.filter((r) => r.team.toLowerCase().includes(needle)) : board.rows
+  for (const r of visible) {
     const last = sections[sections.length - 1]
     if (last && last.tier === r.tier) last.rows.push(r)
     else sections.push({ tier: r.tier, rows: [r] })
@@ -129,6 +130,19 @@ export function Leaderboard({ onTeam }: { onTeam: (t: string) => void }) {
         </div>
       ) : (
         <div className="space-y-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="sr-only" htmlFor="lb-search">Find a team</label>
+            <input
+              id="lb-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find a team"
+              className="w-full max-w-xs rounded-full border border-stone-300 bg-white px-4 py-1.5 text-sm outline-none focus:border-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-700/30"
+            />
+            {needle && <span className="text-xs text-stone-500" role="status">{visible.length} of {board.rows.length} teams</span>}
+          </div>
+          {needle && visible.length === 0 && <p className="text-sm text-stone-600">No team matches “{query}”.</p>}
           {sections.map((s) => (
             <section key={s.tier} aria-label={s.tier}>
               {board.knockoutKnown && <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">{s.tier}</h2>}
@@ -151,7 +165,7 @@ export function Leaderboard({ onTeam }: { onTeam: (t: string) => void }) {
                     {s.rows.map((r) => (
                       <tr key={r.team} className="liquid border-t border-stone-100">
                         <td className="whitespace-nowrap px-3 py-2 font-semibold tabular-nums">{r.withdrawn ? '–' : r.rank}</td>
-                        <td className="px-3 py-2"><TeamBtn name={r.team} onTeam={onTeam} /></td>
+                        <td className="sticky left-0 z-10 bg-white px-3 py-2 shadow-[1px_0_0_#e7e5e4]"><TeamBtn name={r.team} onTeam={onTeam} /></td>
                         <td className="px-3 py-2">
                           <span className="block font-medium text-stone-800">{r.status}</span>
                           <span className="block text-xs text-stone-500">{r.detail}</span>

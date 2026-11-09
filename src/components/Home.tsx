@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { divisionsForGrade } from '../lib/divisions'
+import { DIVISIONS, divisionsForGrade } from '../lib/divisions'
 import { groupProgress, koProgress, stageOf } from '../lib/stage'
 
 const GRADES = [
@@ -7,6 +7,17 @@ const GRADES = [
   { id: 'B', name: 'B Grade', available: true },
   { id: 'C', name: 'C Grade', available: false },
 ]
+
+/** Every school abbreviation with the competitions it appears in, for the finder. */
+const TEAM_INDEX = (() => {
+  const map = new Map<string, { id: string; title: string }[]>()
+  for (const d of DIVISIONS) {
+    for (const t of new Set(d.groupsRaw.trim().split('\n').flatMap((l) => [l.split('|')[4], l.split('|')[5]]))) {
+      map.set(t, [...(map.get(t) ?? []), { id: d.id, title: d.title }])
+    }
+  }
+  return map
+})()
 
 const savedGrade = () => {
   try {
@@ -50,6 +61,11 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
     setGradeState(g)
     try { sessionStorage.setItem('home-grade', g) } catch { /* keep working without storage */ }
   }
+  const [query, setQuery] = useState('')
+  const needle = query.trim().toLowerCase()
+  const found = needle
+    ? [...TEAM_INDEX].filter(([team]) => team.toLowerCase().includes(needle)).sort(([a], [b]) => a.localeCompare(b)).slice(0, 8)
+    : []
   const divisions = divisionsForGrade(grade === 'B' ? 'B' : 'A')
   // Divisions One and Two are the headline competitions (two large cards); Division Three has four regions.
   const rows = [
@@ -66,14 +82,46 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
             Pick a grade, then a division and region, to see its group tables, final-round bracket, team statistics and
             simulations. Every competition is kept entirely separate.
           </p>
-          <div className="mt-7 flex flex-wrap gap-2" role="group" aria-label="Grade">
+          <div className="mt-6 max-w-sm">
+            <label htmlFor="team-finder" className="sr-only">Find a school</label>
+            <input
+              id="team-finder"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find a school, e.g. HKUGA"
+              className="w-full rounded-full border border-emerald-700 bg-emerald-900/60 px-4 py-2 text-sm text-white placeholder:text-emerald-300/70 outline-none focus-visible:border-white focus-visible:ring-2 focus-visible:ring-emerald-300/40"
+            />
+            {needle && (
+              <ul className="mt-2 max-h-72 overflow-auto rounded-lg border border-emerald-800 bg-emerald-900/80 text-sm" aria-label="Matching schools" role="status">
+                {found.length === 0 && <li className="px-4 py-2 text-emerald-200">No school matches “{query}”.</li>}
+                {found.map(([team, where]) => (
+                  <li key={team} className="border-b border-emerald-800/60 px-4 py-2 last:border-0">
+                    <span className="font-semibold">{team}</span>
+                    <span className="mt-1 flex flex-wrap gap-1.5">
+                      {where.map((w) => (
+                        <button
+                          key={w.id}
+                          onClick={() => onOpen(w.id)}
+                          className="rounded-full border border-emerald-600 px-2.5 py-0.5 text-xs text-emerald-100 hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-emerald-300"
+                        >
+                          {w.title.replace(' · Boys ', ' · ')}
+                        </button>
+                      ))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Grade">
             {GRADES.map((g) => (
               <button
                 key={g.id}
                 disabled={!g.available}
                 aria-pressed={grade === g.id}
                 onClick={() => setGrade(g.id)}
-                className={`liquid liquid-dark rounded-full border px-5 py-2 text-sm font-medium transition-colors ${
+                className={`liquid liquid-dark rounded-full border px-5 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 ${
                   grade === g.id ? 'border-white bg-white text-emerald-950' : 'border-emerald-700 text-emerald-100'
                 } disabled:cursor-not-allowed disabled:opacity-50`}
               >

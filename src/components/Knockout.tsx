@@ -432,7 +432,7 @@ export function MatchCard({
             </span>
           )}
           <span className="font-medium">
-            {m.id === "TP" ? "3rd" : m.id === "F" ? "Final" : m.id}
+            {m.id === "TP" ? "3rd" : m.id === "F" ? "Final" : m.round === "PO" ? "Play-off" : m.id}
           </span>
           <button
             onClick={(e) => {

@@ -11,12 +11,35 @@ import { Simulation } from './components/Simulation'
 import { Home } from './components/Home'
 import { Leaderboard } from './components/Leaderboard'
 import { simulationBlockers } from './lib/readiness'
+import { stageOf } from './lib/stage'
 import { activeDivision, setActiveDivision } from './lib/data'
 import { divisionById } from './lib/divisions'
 
 function DivisionPage({ onHome }: { onHome: () => void }) {
   const division = activeDivision()
   const blockers = simulationBlockers()
+  const stage = stageOf(division)
+  const TABS: Tab[] = ['group', 'knockout', 'leaderboard', 'stats', 'simulation']
+  const TAB_NAMES: Record<Tab, string> = { group: 'Group Stage', knockout: 'Knockout', leaderboard: 'Leaderboard', stats: 'Team Stats', simulation: 'Simulation' }
+
+  useEffect(() => {
+    document.title = `${division.title} · Inter-School Football 2026–27`
+    return () => { document.title = 'Inter-School Football Competition 2026–27' }
+  }, [division.title])
+
+  // Arrow keys, Home and End move between tabs, as people expect from a tab list
+  const onTabKey = (e: React.KeyboardEvent, index: number) => {
+    const next =
+      e.key === 'ArrowRight' ? (index + 1) % TABS.length
+      : e.key === 'ArrowLeft' ? (index + TABS.length - 1) % TABS.length
+      : e.key === 'Home' ? 0
+      : e.key === 'End' ? TABS.length - 1
+      : -1
+    if (next < 0) return
+    e.preventDefault()
+    setTab(TABS[next])
+    document.getElementById(`tab-${TABS[next]}`)?.focus()
+  }
   const [tab, setTab] = usePersistentState<Tab>('tab', 'group')
   const [team, setTeam] = useState<string | null>(null)
   const [detail, setDetail] = useState<Detail | null>(null)
@@ -49,25 +72,34 @@ function DivisionPage({ onHome }: { onHome: () => void }) {
           <p className="mt-1 text-sm text-emerald-200/80">
             {division.region ? `${division.region} · ` : ''}{division.koMatches.length > 0 ? 'Group stage results and final round (single knock-out)' : 'Group stage fixtures and results'}{division.documentDate ? ` · fixtures as published ${division.documentDate}` : ''}
           </p>
-          <nav className="-mx-2 mt-5 flex gap-1 overflow-x-auto px-2 pt-2" role="tablist">
-            {(['group', 'knockout', 'leaderboard', 'stats', 'simulation'] as Tab[]).map((t) => (
+          <p className="mt-3 inline-flex max-w-full flex-wrap items-baseline gap-x-2 rounded-lg bg-emerald-900/60 px-3 py-1.5 text-xs text-emerald-100">
+            <span className="font-semibold uppercase tracking-widest text-emerald-300">Latest stage</span>
+            <span className="font-semibold text-white">{stage.label}</span>
+            <span className="text-emerald-200/90">{stage.detail}</span>
+          </p>
+          <nav className="-mx-2 mt-5 flex gap-1 overflow-x-auto px-2 pt-2" role="tablist" aria-label="Competition sections">
+            {TABS.map((t, i) => (
               <button
                 key={t}
+                id={`tab-${t}`}
                 role="tab"
                 aria-selected={tab === t}
+                aria-controls="tab-panel"
+                tabIndex={tab === t ? 0 : -1}
                 onClick={() => setTab(t)}
-                className={`main-tab liquid liquid-dark rounded-t-lg px-5 py-2.5 text-sm font-medium ${
+                onKeyDown={(e) => onTabKey(e, i)}
+                className={`main-tab liquid liquid-dark shrink-0 whitespace-nowrap rounded-t-lg px-5 py-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-emerald-300 ${
                   tab === t ? 'bg-stone-50 text-emerald-950' : 'text-emerald-100'
                 }`}
               >
-                {t === 'group' ? 'Group Stage' : t === 'knockout' ? 'Knockout' : t === 'leaderboard' ? 'Leaderboard' : t === 'stats' ? 'Team Stats' : 'Simulation'}
+                {TAB_NAMES[t]}
               </button>
             ))}
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-3 py-6 sm:px-5 sm:py-8">
+      <main id="tab-panel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="mx-auto max-w-6xl px-3 py-6 sm:px-5 sm:py-8">
         {tab === 'group' ? (
           <GroupStage onTeam={setTeam} onMatch={setDetail} />
         ) : tab === 'knockout' ? (
