@@ -42,10 +42,10 @@ describe("Round of 14 results", () => {
       ["SKHLMC", "IKTMC"], ["KCC", "ISS"], ["CFSS", "SKHTSK"], ["HKUGA", "CANADIAN"],
     ])
   })
-  it("records IKTMC's reported quarter-final win as awaiting confirmation", () => {
+  it("records IKTMC's confirmed quarter-final win", () => {
     const q1 = koById("Q1")
     expect(q1.score).toEqual([0, 2])
-    expect(q1.scoreTbc).toBe(true)
+    expect(q1.scoreTbc).toBeUndefined()
     expect(koWinner(q1)).toBe("IKTMC")
     expect(slotTeam(koById("S1").home)).toBe("IKTMC")
   })
@@ -57,11 +57,17 @@ describe("Round of 14 results", () => {
     expect(koWinner(r5)).toBe("SKHTSK")
     expect(officialScore(r5)).toEqual([1, 1])
   })
-  it("records CFSS's reported penalty win over SKHTSK as awaiting confirmation", () => {
+  it("records KCC's quarter-final win over ISS", () => {
+    const q2 = koById("Q2")
+    expect(q2.score).toEqual([2, 1])
+    expect(koWinner(q2)).toBe("KCC")
+    expect(slotTeam(koById("S1").away)).toBe("KCC")
+  })
+  it("records CFSS's confirmed 4–2 penalty win over SKHTSK", () => {
     const q3 = koById("Q3")
     expect(q3.score).toEqual([2, 2])
-    expect(q3.pens).toEqual([3, 2])
-    expect(q3.scoreTbc).toBe(true)
+    expect(q3.pens).toEqual([4, 2])
+    expect(q3.scoreTbc).toBeUndefined()
     expect(koWinner(q3)).toBe("CFSS")
     expect(slotTeam(koById("S2").home)).toBe("CFSS")
   })
@@ -96,7 +102,7 @@ describe("starting stage", () => {
     expect(options.find((o) => o.recommended)?.stage).toBe("QF")
     expect(latestStartStage()).toBe("QF")
     expect(fixedMatchIds("R14").size).toBe(0)
-    expect([...fixedMatchIds("QF")].sort()).toEqual(["Q1", "Q3", "R1", "R2", "R3", "R4", "R5", "R6"])
+    expect([...fixedMatchIds("QF")].sort()).toEqual(["Q1", "Q2", "Q3", "R1", "R2", "R3", "R4", "R5", "R6"])
   })
   it("fixes the official Round of 14 when starting from the quarter-finals", () => {
     const totals = simulate("QF", 100)
@@ -120,15 +126,15 @@ describe("starting stage", () => {
 })
 
 describe("two possible teams on both sides", () => {
-  it("shows the confirmed team and the two remaining candidates in Semi-final 1", () => {
+  it("shows both confirmed teams and how they got there in Semi-final 1", () => {
     const html = renderToStaticMarkup(<MatchModal detail={{ kind: "ko", id: "S1" }} onClose={noop} onTeam={noop} />)
-    for (const team of ["IKTMC", "KCC", "ISS"]) expect(html).toContain(team)
-    expect(html).toContain("Beat SKHLMC 2–0*")
-    expect(html).toContain("Quarter-final 2")
+    for (const team of ["IKTMC", "KCC"]) expect(html).toContain(team)
+    expect(html).toContain("Beat SKHLMC 2–0")
+    expect(html).not.toContain("Beat SKHLMC 2–0*")
+    expect(html).toContain("Beat ISS 2–1")
   })
   it("keeps the final and third-place match generic until both feeder matches have teams", () => {
     const html = renderToStaticMarkup(<MatchModal detail={{ kind: "ko", id: "F" }} onClose={noop} onTeam={noop} />)
-    expect(html).toContain("Winner of Semi-final 1")
     expect(html).toContain("Winner of Semi-final 2")
     expect(html).not.toContain("Win and result probability")
   })
@@ -192,9 +198,7 @@ describe("simulation panels", () => {
     expect(html).toContain("bg-rose-100")
     expect(html).toContain(">1<")
     expect(html).toContain("(5)")
-    expect(html).toContain("Score to be confirmed")
-    expect(html).toContain("0*")
-    expect(html).toContain("2*")
+    expect(html).not.toContain("Score to be confirmed")
     expect(renderToStaticMarkup(<AppliedResults stage="R14" />)).toContain("No official results are applied")
   })
   it("states which data the ratings use for the chosen starting stage", () => {
@@ -202,7 +206,7 @@ describe("simulation panels", () => {
     expect(fromR14).toContain("group-stage matches only")
     expect(fromR14).toContain("not used from this stage")
     const fromQf = renderToStaticMarkup(<Parameters stage="QF" />)
-    expect(fromQf).toContain("plus 8 official knockout result")
+    expect(fromQf).toContain("plus 9 official knockout result")
   })
   it("lists model parameters and per-team reasons, with editing off until switched on", () => {
     const html = renderToStaticMarkup(<Parameters stage="QF" />)

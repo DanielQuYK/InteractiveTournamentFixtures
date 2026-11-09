@@ -35,8 +35,8 @@ export const D3H_RESULTS: Record<string, KoResult> = {
   R4: { score: [2, 3] }, // KWSC 2–3 CFSS
   R5: { score: [1, 1], pens: [4, 5] }, // HW 1–1 SKHTSK; SKHTSK won 5–4 on penalties
   R6: { score: [4, 1] }, // HKUGA 4–1 SPCC
-  // Source reported IKTMC as the 2–0 winner; retain the TBC marker until independently checked.
-  Q1: { score: [0, 2], scoreTbc: true },
-  // Reported CFSS 2–2 SKHTSK, CFSS won 3–2 on penalties; awaiting confirmation from HKSSF.
-  Q3: { score: [2, 2], pens: [3, 2], scoreTbc: true },
+  // Confirmed in the HKSSF final-round bracket amended 5.11.26 (issued 9 November 2026).
+  Q1: { score: [0, 2] }, // SKHLMC 0–2 IKTMC
+  Q2: { score: [2, 1] }, // KCC 2–1 ISS
+  Q3: { score: [2, 2], pens: [4, 2] }, // CFSS 2–2 SKHTSK; CFSS won 4–2 on penalties
 }

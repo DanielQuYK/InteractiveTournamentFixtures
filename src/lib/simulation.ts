@@ -8,6 +8,7 @@ import {
   koPlayed,
   koById,
   koWinner,
+  matchCode,
   slotTeam,
   type KoMatch,
   type Slot,
@@ -128,12 +129,90 @@ const stageLabel = (stage: StartStage) =>
  * Round of 14 means a completely hypothetical tournament. Later starts include
  * all completed earlier matches and any completed matches within that stage.
  */
-export function fixedMatchIds(stage: StartStage): Set<string> {
+export function fixedMatchIds(stage: StartStage, custom?: readonly string[]): Set<string> {
+  if (custom) return new Set(custom)
   const cut = ROUND_INDEX[stage]
   if (stage === activeStages()[0]) return new Set()
   return new Set(
     KO_MATCHES.filter((m) => m.round !== "PO" && ROUND_INDEX[m.round] <= cut && koPlayed(m)).map((m) => m.id),
   )
+}
+
+/** The official results a run treated as fixed, whether chosen by stage or by hand. */
+export const runFixedIds = (run: Pick<SimulationRun, 'startStage' | 'fixedIds'>) => fixedMatchIds(run.startStage, run.fixedIds)
+
+/* ---------- Hand-picked official results ---------- */
+
+/** Every earlier match that feeds this one, directly or through later rounds, in bracket order. */
+export function matchPrerequisites(id: string): string[] {
+  const out = new Set<string>()
+  const visit = (matchId: string) => {
+    const m = koById(matchId)
+    for (const slot of [m.home, m.away]) {
+      if (slot.kind === "winner" || slot.kind === "loser") {
+        if (!out.has(slot.of)) {
+          out.add(slot.of)
+          visit(slot.of)
+        }
+      }
+    }
+  }
+  visit(id)
+  return MATCH_ORDER.filter((x) => out.has(x))
+}
+
+/** Matches that can only be reached through this one: choosing it requires nothing, but un-choosing it drops these. */
+export function matchDependents(id: string): string[] {
+  return MATCH_ORDER.filter((x) => matchPrerequisites(x).includes(id))
+}
+
+/**
+ * Only played matches can be fixed, and a match can be fixed only when everything that fed it is also
+ * fixed, so the teams in it are the real ones. Drops anything that breaks those rules.
+ */
+export function sanitizeSelection(ids: Iterable<string>): string[] {
+  let keep = new Set([...ids].filter((id) => MATCH_ORDER.includes(id) && koPlayed(koById(id))))
+  for (let changed = true; changed; ) {
+    changed = false
+    for (const id of [...keep]) {
+      if (!matchPrerequisites(id).every((p) => keep.has(p))) {
+        keep.delete(id)
+        changed = true
+      }
+    }
+  }
+  return MATCH_ORDER.filter((id) => keep.has(id))
+}
+
+export interface PickState {
+  id: string
+  checked: boolean
+  /** Whether the box can be ticked or unticked right now. */
+  enabled: boolean
+  /** Why it cannot be ticked, in plain words. */
+  reason: string
+}
+
+/** What the user may tick, given what is ticked already. */
+export function pickStates(selected: ReadonlySet<string>): PickState[] {
+  return MATCH_ORDER.map((id) => {
+    const m = koById(id)
+    const checked = selected.has(id)
+    if (!koPlayed(m)) return { id, checked: false, enabled: false, reason: "Not played yet" }
+    const missing = matchPrerequisites(id).filter((p) => !selected.has(p))
+    if (!checked && missing.length) {
+      const unplayed = missing.filter((p) => !koPlayed(koById(p)))
+      return {
+        id,
+        checked,
+        enabled: false,
+        reason: unplayed.length
+          ? `Needs ${unplayed.map((p) => matchCode(koById(p))).join(", ")}, not played yet`
+          : `Tick ${missing.map((p) => matchCode(koById(p))).join(", ")} first`,
+      }
+    }
+    return { id, checked, enabled: true, reason: "" }
+  })
 }
 
 export const startStages = (): StartStage[] => activeStages()
@@ -208,6 +287,11 @@ export interface SimulationRun {
   /** Scoreline counts for every pairing that occurred, by stage (compact: at most a few hundred rows). */
   matchups: MatchupRecord[]
   startStage: StartStage
+  /** When set, exactly these official results were fixed (a hand-picked selection) instead of a whole stage. */
+  fixedIds?: string[]
+  /** Results that had to happen in every counted run, and how many raw runs were needed to collect `count`. */
+  scenario?: ScenarioCondition[]
+  attempts?: number
   /** True when the run used edited model parameters or team ratings. */
   customised?: boolean
   /** The model settings the run used, so match details can be re-derived faithfully. */
@@ -455,11 +539,46 @@ export function expectedGoals(
 export const penaltyHomeChance = (homeLambda: number, awayLambda: number, tilt = 1) =>
   0.5 + tilt * (homeLambda / (homeLambda + awayLambda) - 0.5)
 
+/** A result the user wants to happen in every simulated tournament. */
+export interface ScenarioCondition {
+  id: string
+  winner: string
+  /** [winner's goals, loser's goals]. Level means the winner won the shoot-out. Omit to allow any scoreline. */
+  goals?: [number, number]
+}
+export type Scenario = ReadonlyMap<string, ScenarioCondition>
+
+/** Draws a match whose winner (and optionally scoreline) is dictated. Exactly samples the model given that winner. */
+function forcedMatch(
+  home: string,
+  away: string,
+  condition: ScenarioCondition,
+  strengths: ReturnType<typeof simulationStrengths>,
+): SimMatchResult {
+  const loser = condition.winner === home ? away : home
+  const winnerIsHome = condition.winner === home
+  if (condition.goals) {
+    const [wg, lg] = condition.goals
+    return { home, away, hg: winnerIsHome ? wg : lg, ag: winnerIsHome ? lg : wg, winner: condition.winner, loser }
+  }
+  const { homeLambda, awayLambda } = expectedGoals(home, away, strengths)
+  const homeShootout = penaltyHomeChance(homeLambda, awayLambda, strengths.params.shootoutTilt)
+  // Redraw until the dictated team wins; this samples scorelines in proportion to how likely each is given that outcome
+  for (let attempt = 0; attempt < 20000; attempt++) {
+    const hg = poisson(homeLambda)
+    const ag = poisson(awayLambda)
+    const homeWins = hg !== ag ? hg > ag : Math.random() < homeShootout
+    if (homeWins === winnerIsHome) return { home, away, hg, ag, winner: condition.winner, loser }
+  }
+  return { home, away, hg: winnerIsHome ? 1 : 0, ag: winnerIsHome ? 0 : 1, winner: condition.winner, loser }
+}
+
 export function simulateMatch(
   id: string,
   home: string,
   away: string,
   strengths: ReturnType<typeof simulationStrengths>,
+  condition?: ScenarioCondition,
 ): SimMatchResult {
   const official = koById(id)
   const score = officialScore(official)
@@ -475,6 +594,10 @@ export function simulateMatch(
         loser: winner === home ? away : home,
       }
     }
+  }
+
+  if (condition && (condition.winner === home || condition.winner === away)) {
+    return forcedMatch(home, away, condition, strengths)
   }
 
   const { homeLambda, awayLambda } = expectedGoals(home, away, strengths)
@@ -493,34 +616,54 @@ export function simulateMatch(
   return { home, away, hg, ag, winner, loser: winner === home ? away : home }
 }
 
+/**
+ * Plays one tournament. With a scenario, the dictated results are forced; if a team the scenario needs in a
+ * match is not there, the run is thrown away without changing any totals and `false` is returned.
+ */
 export function runOneSimulation(
   strengths: ReturnType<typeof simulationStrengths>,
   aggregate: Map<string, SimAggregate>,
   brackets?: BracketTally,
   matchups?: MatchupTally,
-) {
+  scenario?: Scenario,
+): boolean {
+  // Play the whole bracket first; nothing is recorded until it is known the run is acceptable.
+  const results = new Map<string, SimMatchResult>()
+  const played: { id: string; round: string; result: SimMatchResult }[] = []
+  const resolve = (slot: Slot): string => {
+    if (slot.kind === "team") return slot.team
+    if (slot.kind === "pending") throw new Error("The knockout line-up has not been confirmed, so it cannot be simulated.")
+    const source = results.get(slot.of)!
+    return slot.kind === "winner" ? source.winner : source.loser
+  }
+  for (const id of MATCH_ORDER) {
+    const match = koById(id)
+    const home = resolve(match.home)
+    const away = resolve(match.away)
+    const condition = scenario?.get(id)
+    if (condition && !strengths.fixed.has(id) && condition.winner !== home && condition.winner !== away) return false
+    const result = simulateMatch(id, home, away, strengths, condition)
+    results.set(id, result)
+    played.push({ id, round: match.round, result })
+  }
+
   const finish = (team: string, key: FinishKey) => {
     aggregate.get(team)!.finishes[key]++
   }
   // Per-simulation tally, folded into the compact aggregate at the end.
-  const tally = new Map<string, {
-    played: number
-    won: number
-  }>()
+  const tally = new Map<string, { played: number; won: number }>()
   const count = (team: string) => {
     if (!tally.has(team)) tally.set(team, { played: 0, won: 0 })
     return tally.get(team)!
   }
   const winners: string[] = []
   const margins: number[] = []
-  const play = (id: string, home: string, away: string) => {
-    const result = simulateMatch(id, home, away, strengths)
+  for (const { id, round, result } of played) {
+    const { home, away } = result
     winners.push(result.winner)
     if (matchups) recordMatchup(matchups, id, result)
     // Winner's goal margin; a shoot-out win after a level score counts as zero.
-    margins.push(
-      result.winner === home ? result.hg - result.ag : result.ag - result.hg,
-    )
+    margins.push(result.winner === home ? result.hg - result.ag : result.ag - result.hg)
     const h = aggregate.get(home)!,
       a = aggregate.get(away)!
     count(home).played++
@@ -533,26 +676,12 @@ export function runOneSimulation(
     a.gf += result.ag
     a.ga += result.hg
     aggregate.get(result.winner)!.wins++
-    return result
-  }
-
-  const results = new Map<string, SimMatchResult>()
-  const resolve = (slot: Slot): string => {
-    if (slot.kind === "team") return slot.team
-    if (slot.kind === "pending") throw new Error("The knockout line-up has not been confirmed, so it cannot be simulated.")
-    const source = results.get(slot.of)!
-    return slot.kind === "winner" ? source.winner : source.loser
-  }
-  for (const id of MATCH_ORDER) {
-    const match = koById(id)
-    const result = play(id, resolve(match.home), resolve(match.away))
-    results.set(id, result)
-    if (match.round === "R14") finish(result.loser, "r14")
-    else if (match.round === "QF") finish(result.loser, "qf")
-    else if (match.round === "TP") {
+    if (round === "R14") finish(result.loser, "r14")
+    else if (round === "QF") finish(result.loser, "qf")
+    else if (round === "TP") {
       finish(result.loser, "fourth")
       finish(result.winner, "third")
-    } else if (match.round === "F") {
+    } else if (round === "F") {
       finish(result.loser, "runnerUp")
       finish(result.winner, "champion")
     }
@@ -578,6 +707,7 @@ export function runOneSimulation(
       target.marginSum[index] += margin
     })
   }
+  return true
 }
 
 /* ---------- Reported measures ---------- */

@@ -4,8 +4,8 @@ import { fixedMatchIds, type StartStage } from "../lib/simulation"
 
 
 /** The official results a simulation treats as already played, with winners in green and losers in red. */
-export function AppliedResults({ stage }: { stage: StartStage }) {
-  const ids = fixedMatchIds(stage)
+export function AppliedResults({ stage, fixedIds }: { stage: StartStage; fixedIds?: string[] }) {
+  const ids = fixedMatchIds(stage, fixedIds)
   const matches = KO_MATCHES.filter((m) => ids.has(m.id))
   if (!matches.length) {
     return (

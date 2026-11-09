@@ -4,6 +4,9 @@ import { SimulationCharts } from "./SimulationCharts"
 import { CommonBracket } from "./CommonBracket"
 import { AppliedResults } from "./AppliedResults"
 import { SimulationParameters } from "./SimulationParameters"
+import { ResultPicker } from "./ResultPicker"
+import { ScenarioPanel } from "./ScenarioPanel"
+import { describeCondition, effectiveFixed, expandConditions, sanitizeConditions } from "../lib/scenario"
 import { usePersistentState } from "../lib/hooks"
 import { useModelSettings } from "../lib/useModelSettings"
 import { EmptyComparison } from "./shared"
@@ -23,6 +26,8 @@ import {
   latestStartStage,
   runOneSimulation,
   simulationStrengths,
+  sanitizeSelection,
+  type ScenarioCondition,
   startStageOptions,
   startStages,
 } from "../lib/simulation"
@@ -36,6 +41,19 @@ export function Simulation() {
   const [storedStage, setStartStage] = usePersistentState<StartStage>("sim-stage", latestStartStage())
   // A remembered stage is used only while it is still available.
   const startStage = stageOptions.find((o) => o.stage === storedStage && o.enabled) ? storedStage : latestStartStage()
+  const [mode, setMode] = usePersistentState<"stage" | "custom">("sim-mode", "stage")
+  const [storedPicks, setPicks] = usePersistentState<string[]>("sim-picks", [])
+  // Remembered picks are kept only while they are still valid (played, and with everything that fed them chosen)
+  const picks = useMemo(() => sanitizeSelection(storedPicks), [storedPicks])
+  const [storedScenario, setScenario] = usePersistentState<ScenarioCondition[]>("sim-scenario", [])
+  const conditions = useMemo(() => sanitizeConditions(storedScenario), [storedScenario])
+  const expanded = useMemo(() => expandConditions(conditions), [conditions])
+  // Official results usable as real once the what-if conditions are applied
+  const fixedIds = useMemo(() => {
+    if (mode !== "custom" && conditions.length === 0) return undefined
+    const base = mode === "custom" ? picks : [...fixedMatchIds(startStage)]
+    return effectiveFixed(base, expanded)
+  }, [mode, picks, conditions, expanded, startStage])
   const settings = useModelSettings()
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -64,18 +82,22 @@ export function Simulation() {
     const brackets: BracketTally = new Map()
     const matchups: MatchupTally = new Map()
     // Rounds before the chosen stage use official results; ratings use only those.
-    const strengths = simulationStrengths(fixedMatchIds(startStage), settings.params, settings.overrides)
+    const strengths = simulationStrengths(fixedMatchIds(startStage, fixedIds), settings.params, settings.overrides)
+    const scenario = conditions.length ? expanded.scenario : undefined
+    // With conditions, a run is kept only if every condition held; give up if almost none ever do
+    const maxAttempts = scenario ? Math.max(50_000, simulations * 400) : simulations
+    let attempts = 0
     // Work in slices of about 40 ms, then yield to the browser. Progress is always
     // simulations done ÷ total, and the page stays responsive (and Stop works
     // promptly) however large the run is.
     let done = 0
-    while (done < simulations) {
+    while (done < simulations && attempts < maxAttempts) {
       const sliceEnds = performance.now() + 40
-      while (done < simulations && performance.now() < sliceEnds) {
+      while (done < simulations && attempts < maxAttempts && performance.now() < sliceEnds) {
         // Check the clock every 64 runs rather than after every one.
-        for (let k = 0; k < 64 && done < simulations; k++) {
-          runOneSimulation(strengths, aggregate, brackets, matchups)
-          done++
+        for (let k = 0; k < 64 && done < simulations && attempts < maxAttempts; k++) {
+          attempts++
+          if (runOneSimulation(strengths, aggregate, brackets, matchups, scenario)) done++
         }
       }
       setProgress(done / simulations)
@@ -88,10 +110,20 @@ export function Simulation() {
         return
       }
     }
+    if (done < simulations) {
+      setRunning(false)
+      setNotice(
+        `Only ${done.toLocaleString()} of ${simulations.toLocaleString()} simulations satisfied your conditions after ${attempts.toLocaleString()} attempts. They may be extremely unlikely or contradict each other, so no results were saved.`,
+      )
+      return
+    }
     const run: SimulationRun = {
       id: Date.now(),
       createdAt: new Date(),
       startStage,
+      fixedIds,
+      scenario: conditions.length ? conditions : undefined,
+      attempts: conditions.length ? attempts : undefined,
       customised: settings.customised,
       params: settings.params,
       overrides: settings.overrides,
@@ -104,7 +136,10 @@ export function Simulation() {
     setActiveId(run.id)
     setRunning(false)
     const seconds = (performance.now() - startedAt) / 1000
-    setNotice(`Finished ${simulations.toLocaleString()} simulations in ${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)} s.`)
+    setNotice(
+      `Finished ${simulations.toLocaleString()} simulations in ${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)} s` +
+        (scenario ? `; ${simulations.toLocaleString()} of ${attempts.toLocaleString()} attempted tournaments (${((simulations / attempts) * 100).toFixed(1)}%) satisfied your conditions.` : "."),
+    )
   }
 
   const rows = useMemo(() => {
@@ -171,8 +206,26 @@ export function Simulation() {
       <section className="glass-surface mb-6 rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
         <fieldset disabled={running} className="mb-6">
           <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-500">
-            Simulate from which stage?
+            Which official results count as real?
           </legend>
+          <div className="mb-3 inline-flex rounded-full border border-stone-300 bg-white p-0.5 text-sm" role="radiogroup" aria-label="How to choose results">
+            {([["stage", "By stage"], ["custom", "Pick games"]] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={mode === value}
+                onClick={() => setMode(value)}
+                className={`rounded-full px-4 py-1 transition-colors ${mode === value ? "bg-emerald-800 text-white" : "text-stone-700 hover:text-emerald-900"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {mode === "custom" ? (
+            <ResultPicker selected={picks} onChange={setPicks} disabled={running} />
+          ) : (
+          <>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" role="radiogroup" aria-label="Starting stage">
             {stageOptions.map((option) => {
               const selected = startStage === option.stage
@@ -211,7 +264,17 @@ export function Simulation() {
             The latest stage is recommended because it uses every result entered so far. Starting earlier ignores
             those results, both when playing the bracket and when rating the teams.
           </p>
+          </>
+          )}
         </fieldset>
+        <details className="mb-6 rounded-xl border border-stone-200 bg-stone-50 p-4" open={conditions.length > 0}>
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-stone-500">
+            What-if conditions{conditions.length > 0 && ` (${conditions.length})`}
+          </summary>
+          <div className="mt-3">
+            <ScenarioPanel conditions={conditions} onChange={setScenario} expanded={expanded} disabled={running} />
+          </div>
+        </details>
         <div className="flex flex-wrap items-end gap-4">
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-stone-500">
@@ -256,7 +319,9 @@ export function Simulation() {
           ) : (
             <button
               onClick={start}
-              className="liquid ml-auto rounded-lg bg-emerald-800 px-5 py-2 text-sm font-semibold text-white shadow-sm"
+              disabled={expanded.conflicts.length > 0}
+              title={expanded.conflicts.length > 0 ? "Your what-if conditions contradict each other" : undefined}
+              className="liquid ml-auto rounded-lg bg-emerald-800 px-5 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
             >
               Run simulation
             </button>
@@ -302,7 +367,7 @@ export function Simulation() {
         </p>
       )}
 
-      <SimulationParameters stage={startStage} settings={settings} />
+      <SimulationParameters stage={startStage} fixedIds={fixedIds} settings={settings} />
 
       {!active ? (
         <EmptyComparison text="Choose the number of simulations and run the model to generate probabilities." />
@@ -319,7 +384,7 @@ export function Simulation() {
                 >
                   {runs.map((run) => (
                     <option key={run.id} value={run.id}>
-                      {run.count.toLocaleString()} simulations · from {run.startStage}{run.customised ? " · custom settings" : ""} ·{" "}
+                      {run.count.toLocaleString()} simulations · from {run.fixedIds ? `${run.fixedIds.length} chosen result${run.fixedIds.length === 1 ? "" : "s"}` : run.startStage}{run.customised ? " · custom settings" : ""} ·{" "}
                       {run.createdAt.toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -353,10 +418,22 @@ export function Simulation() {
 
           <section className="glass-surface mb-5 rounded-xl border border-stone-200 bg-white p-4">
             <h3 className="mb-2 font-semibold">
-              Results applied in this run (from {active.startStage})
+              Results applied in this run ({active.fixedIds ? "chosen games" : `from ${active.startStage}`})
               {active.customised && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Custom model settings</span>}
             </h3>
-            <AppliedResults stage={active.startStage} />
+            <AppliedResults stage={active.startStage} fixedIds={active.fixedIds} />
+            {active.scenario && active.scenario.length > 0 && (
+              <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm">
+                <p className="font-semibold text-emerald-900">What-if conditions applied</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {active.scenario.map((c) => <li key={c.id}>{describeCondition(c)}</li>)}
+                </ul>
+                <p className="mt-1 text-xs text-stone-700">
+                  Every counted tournament satisfies all of these (earlier results needed to get there are included).
+                  {active.attempts ? ` ${active.count.toLocaleString()} of ${active.attempts.toLocaleString()} attempts (${((active.count / active.attempts) * 100).toFixed(1)}%) met them.` : ""}
+                </p>
+              </div>
+            )}
           </section>
           <div
             className={`mb-5 rounded-lg border p-4 text-sm ${

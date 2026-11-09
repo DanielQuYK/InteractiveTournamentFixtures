@@ -98,15 +98,15 @@ function NumberField({ label, value, min, max, step, prefix, integer, placeholde
   )
 }
 
-export function SimulationParameters({ stage, settings }: { stage: StartStage; settings: ModelSettings }) {
+export function SimulationParameters({ stage, fixedIds, settings }: { stage: StartStage; fixedIds?: string[]; settings: ModelSettings }) {
   const [editing, setEditing] = useState(false)
   const [koOnly, setKoOnly] = useState(true)
   const [query, setQuery] = useState("")
   const { params, overrides } = settings
-  const knockoutResults = fixedMatchIds(stage).size
+  const knockoutResults = fixedMatchIds(stage, fixedIds).size
   const strengths = useMemo(
-    () => simulationStrengths(fixedMatchIds(stage), params, overrides),
-    [stage, params, overrides],
+    () => simulationStrengths(fixedMatchIds(stage, fixedIds), params, overrides),
+    [stage, fixedIds, params, overrides],
   )
   const editedCount = settings.editedKeys.length + Object.values(overrides).reduce((n, o) => n + Number(o.attack !== undefined) + Number(o.weakness !== undefined), 0)
 

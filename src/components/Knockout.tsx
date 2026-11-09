@@ -5,6 +5,7 @@ import {
   ALL_KO_TEAMS,
   ROUND_NAME,
   activeDivision,
+  matchCode,
   KO_MATCHES,
   VENUES,
   fmtDate,
@@ -422,17 +423,17 @@ export function MatchCard({
       }}
     >
       <div className="flex items-center justify-between bg-stone-100 px-3 py-1 text-[11px] text-stone-600">
-        <span>
+        <span className="whitespace-nowrap">
           {fmtDate(m.date)} · {m.time}
         </span>
-        <span className="flex items-center gap-1.5">
+        <span className="flex shrink-0 items-center gap-1.5">
           {m.scoreTbc && (
             <span className="whitespace-nowrap font-semibold text-amber-700" title="Score to be confirmed and double-checked">
               TBC*
             </span>
           )}
-          <span className="font-medium">
-            {m.id === "TP" ? "3rd" : m.id === "F" ? "Final" : m.round === "PO" ? "Play-off" : m.id}
+          <span className="whitespace-nowrap font-medium">
+            {matchCode(m)}
           </span>
           <button
             onClick={(e) => {

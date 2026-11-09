@@ -11,7 +11,7 @@ import { useDialog } from "../lib/hooks"
 import { groupSeed } from "../lib/stats"
 import {
   MATCH_ORDER,
-  fixedMatchIds,
+  runFixedIds,
   probabilityInterval,
   type MatchupRecord,
   type SimulationRun,
@@ -74,7 +74,7 @@ export function MatchupScorelines({
 
   const match = koById(matchId)
   // A match already played before this run's starting stage is simply a fact in this world.
-  const official = fixedMatchIds(run.startStage).has(matchId)
+  const official = runFixedIds(run).has(matchId)
   // Teams from the same half of the bracket can only meet once, so no stage split is needed.
   const crossSide = bracketSide(home) !== bracketSide(away)
   const pct = (n: number, of: number) => ((n / of) * 100).toFixed(1)
@@ -258,7 +258,7 @@ export function MatchupScorelines({
                   prediction={pairPrediction(
                     home,
                     away,
-                    strengthsBefore(matchId, run.params ?? DEFAULT_PARAMS, run.overrides ?? {}, fixedMatchIds(run.startStage)),
+                    strengthsBefore(matchId, run.params ?? DEFAULT_PARAMS, run.overrides ?? {}, runFixedIds(run)),
                   )}
                   actual={null}
                 />
@@ -438,7 +438,7 @@ function OfficialPrediction({ matchId, run }: { matchId: string; run: Simulation
   const m = koById(matchId)
   const home = slotTeam(m.home)
   const away = slotTeam(m.away)
-  const world = fixedMatchIds(run.startStage)
+  const world = runFixedIds(run)
   const prediction = home && away
     ? predictFixture(matchId, strengthsBefore(matchId, run.params ?? DEFAULT_PARAMS, run.overrides ?? {}, world))
     : null

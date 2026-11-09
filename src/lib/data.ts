@@ -333,14 +333,19 @@ export function slotTeam(s: Slot): string | null {
   return s.kind === 'winner' ? koWinner(src) : koLoser(src)
 }
 
-/** Short name of a match for use in labels, e.g. "R14-3", "Q1" or "S2". */
-export function matchShort(m: KoMatch): string {
-  if (m.round === 'R14') {
-    const n = /(\d+)/.exec(ROUND_NAME.R14)?.[1]
-    return n ? `R${n}-${m.id.slice(1)}` : m.label
-  }
-  return m.id
+/**
+ * Short, unique code for a match, the same in every division: "Ro14-3" (third Round of 14 match),
+ * "QF-2", "SF-1", "3rd", "Final" or "Play-off". The Round-of-N code follows the first round's name.
+ */
+export function matchCode(m: KoMatch): string {
+  if (m.round === 'TP') return '3rd'
+  if (m.round === 'F') return 'Final'
+  if (m.round === 'PO') return 'Play-off'
+  const k = KO_MATCHES.filter((x) => x.round === m.round).findIndex((x) => x.id === m.id) + 1
+  if (m.round === 'R14') return `Ro${/(\d+)/.exec(ROUND_NAME.R14)?.[1] ?? 1}-${k}`
+  return `${m.round}-${k}`
 }
+export const matchShort = matchCode
 
 export function slotText(s: Slot): string {
   const t = slotTeam(s)

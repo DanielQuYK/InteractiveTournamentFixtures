@@ -30,7 +30,8 @@ describe("full-time probabilities", () => {
     expect(p.homeAdvances).toBeLessThan(p.home + p.draw + 1e-9)
   })
   it("offers no probability unless both teams are confirmed", () => {
-    expect(predictFixture("S1")).toBeNull()
+    expect(predictFixture("S1")).not.toBeNull() // IKTMC v KCC are both confirmed
+    expect(predictFixture("S2")).toBeNull() // CFSS v the Quarter-final 4 winner
     expect(predictFixture("F")).toBeNull()
     expect(predictFixture("TP")).toBeNull()
     expect(predictFixture("R1")).not.toBeNull()
@@ -46,11 +47,11 @@ describe("full-time probabilities", () => {
 describe("HKSSF rules: no extra time", () => {
   it("sends every full-time draw straight to penalties, so draws are not reduced", () => {
     const strengths = simulationStrengths(fixedMatchIds("QF"))
-    const expected = pairPrediction("KCC", "ISS", strengths).draw
+    const expected = pairPrediction("HKUGA", "CANADIAN", strengths).draw
     let draws = 0
     const n = 20000
     for (let i = 0; i < n; i++) {
-      const r = simulateMatch("Q2", "KCC", "ISS", strengths)
+      const r = simulateMatch("Q4", "HKUGA", "CANADIAN", strengths)
       if (r.hg === r.ag) draws++
     }
     expect(Math.abs(draws / n - expected)).toBeLessThan(0.02)

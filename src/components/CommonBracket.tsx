@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { koById } from "../lib/data"
 import { activateOnKey } from "../lib/hooks"
 import { groupSeed } from "../lib/stats"
-import { fixedMatchIds } from "../lib/simulation"
+import { runFixedIds } from "../lib/simulation"
 import {
   MATCH_ORDER,
   MIN_BRACKET_RUNS,
@@ -19,7 +19,7 @@ import {
   TAG,
   colX,
 } from "../lib/bracketLayout"
-import { fmtDate, VENUE_SHORT } from "../lib/data"
+import { fmtDate, VENUE_SHORT, matchCode } from "../lib/data"
 import { BracketTip, BracketToolbar, BracketViewport, useBracketZoom } from "./BracketViewer"
 import { KnockoutTeamSearch, type KnockoutTeamState } from "./Knockout"
 import { MatchupScorelines } from "./MatchupScorelines"
@@ -92,7 +92,7 @@ export function CommonBracket({ run }: { run: SimulationRun }) {
   const margin = (i: number) => selected.marginSum[i] / selected.count
   const share = (i: number) => ((slotShare[i].get(winners[i]) ?? 0) / run.count) * 100
   const open = openMatch ? MATCH_ORDER.indexOf(openMatch) : -1
-  const fixed = fixedMatchIds(run.startStage)
+  const fixed = runFixedIds(run)
 
   return (
     <section className="glass-surface mt-6 rounded-xl border border-stone-200 bg-white p-4 sm:p-6">
@@ -242,9 +242,9 @@ function SimulatedMatchCard({ id, teams, winner, margin, share, official, onOpen
       style={{ left: p.x, top: p.y - CARD_H / 2, width: CARD_W, height: CARD_H }}
     >
       <div className="flex items-center justify-between bg-stone-100 px-3 py-1 text-[11px] text-stone-600">
-        <span>{fmtDate(match.date)} · {match.time}</span>
-        <span className="flex items-center gap-1.5">
-          <span className="font-medium">{id === "TP" ? "3rd" : id === "F" ? "Final" : id}</span>
+        <span className="whitespace-nowrap">{fmtDate(match.date)} · {match.time}</span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <span className="whitespace-nowrap font-medium">{matchCode(match)}</span>
           <button
             onClick={(e) => {
               e.stopPropagation()

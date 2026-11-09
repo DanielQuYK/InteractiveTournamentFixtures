@@ -9,14 +9,14 @@ const stage = (id: string) => stageOf(divisionById(id)!)
 const row = (mode: 'stage' | 'full', team: string) => leaderboard(mode).rows.find((r) => r.team === team)!
 
 describe('latest stage', () => {
-  it('Division Three HK: quarter-finals with one awaiting result and one still to play', () => {
+  it('Division Three HK: three quarter-finals played, one still to play', () => {
     const s = stage('d3h')
     expect(s.label).toBe('Quarter-finals')
-    expect(s.detail).toContain('2 of 4 played')
-    expect(s.detail).toContain('1 awaiting a result')
-    expect(s.detail).toContain('1 to play')
-    expect(s.detail).toContain('1 score to be confirmed'.replace('1 score', '2 scores'))
-    expect(koProgress(divisionById('d3h')!)).toEqual({ played: 8, total: 14 })
+    expect(s.detail).toContain('3 of 4 played')
+    expect(s.detail).toContain('1 to play (next Tue 10 Nov)')
+    expect(s.detail).not.toContain('awaiting')
+    expect(s.detail).not.toContain('to be confirmed')
+    expect(koProgress(divisionById('d3h')!)).toEqual({ played: 9, total: 14 })
   })
 
   it('Division One and Two have not started the knockout', () => {
@@ -46,13 +46,14 @@ describe('leaderboard by stage reached (Division Three HK)', () => {
       expect(r.rank).toBe('9=')
       expect([r.best, r.worst]).toEqual([9, 14])
     }
-    for (const t of ['SKHLMC', 'SKHTSK']) expect(row('stage', t).rank).toBe('5=')
+    for (const t of ['SKHLMC', 'SKHTSK', 'ISS']) expect(row('stage', t).rank).toBe('5=')
   })
 
   it('shows ranges for teams still in and ranks non-qualifiers below the bracket', () => {
     setActiveDivision('d3h')
     expect(row('stage', 'IKTMC').rank).toBe('1–4')
-    expect(row('stage', 'KCC').rank).toBe('1–8')
+    expect(row('stage', 'KCC').rank).toBe('1–4')
+    expect(row('stage', 'HKUGA').rank).toBe('1–8')
     const exit = leaderboard('stage').rows.filter((r) => r.status === 'Out: group stage')
     expect(exit.length).toBeGreaterThan(0)
     expect(exit.every((r) => r.best === 15)).toBe(true)
@@ -77,7 +78,7 @@ describe('full ranking', () => {
   it('reports knockout contributions separately from totals', () => {
     setActiveDivision('d3h')
     const r = leaderboard('full').rows.find((x) => x.team === 'IKTMC')!
-    // IKTMC won R1 4-1 and Q1 2-0 (reported)
+    // IKTMC won R1 4-1 and Q1 2-0
     expect(r.gf.knockout).toBe(6)
     expect(r.ga.knockout).toBe(1)
     expect(r.gd.knockout).toBe(5)

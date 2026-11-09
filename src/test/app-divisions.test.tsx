@@ -43,3 +43,30 @@ describe.each(DIVISIONS.map((d) => d.id))('%s views', (id) => {
     expect(foreign.filter((t) => words.has(t) && !own.has(t))).toEqual([])
   })
 })
+
+describe('bracket result picker', () => {
+  it.each(['d1', 'd2', 'd3h'])('%s: shows a checkbox per match with readable codes', async (id) => {
+    const { ResultPicker } = await import('../components/ResultPicker')
+    setActiveDivision(id)
+    const html = renderToStaticMarkup(<ResultPicker selected={[]} onChange={noop} />)
+    expect((html.match(/role="checkbox"/g) ?? []).length).toBeGreaterThanOrEqual(4)
+    expect(html).toContain('Tick every played result')
+    // Match codes such as Ro14-5 must never wrap onto two lines
+    expect(html).toMatch(/whitespace-nowrap[^>]*>(Ro14-\d|QF-\d|SF-\d|Final)</)
+    if (id === 'd3h') {
+      expect(html).toContain('Ro14-1')
+      expect(html).toContain('Not played yet')
+      expect(html).toContain('With earlier games')
+    }
+  })
+})
+
+describe('match codes stay on one line in every bracket', () => {
+  it.each(['d1', 'd2', 'd3h', 'k1'])('%s', async (id) => {
+    const { Knockout } = await import('../components/Knockout')
+    setActiveDivision(id)
+    const html = renderToStaticMarkup(<Knockout onTeam={noop} onMatch={noop} />)
+    const pills = html.match(/<span class="whitespace-nowrap font-medium">[^<]*</g) ?? []
+    expect(pills.length).toBeGreaterThanOrEqual(4)
+  })
+})

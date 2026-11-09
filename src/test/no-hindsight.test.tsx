@@ -89,7 +89,8 @@ describe("highlighting what happened", () => {
       winner: "SKHTSK",
       pens: [4, 5],
     })
-    expect(actualResult("Q2")).toBeNull()
+    expect(actualResult("Q2")).toMatchObject({ side: "home", score: [2, 1], winner: "KCC" })
+    expect(actualResult("Q4")).toBeNull()
   })
   it("highlights the winning side on the win bar", () => {
     const html = renderToStaticMarkup(
@@ -251,7 +252,7 @@ describe("penalty shoot-out probability bar", () => {
     expect(normal).toContain("decided in normal time")
     const pens = render("R5", "HW", "SKHTSK", 4)
     expect(pens).toContain("It went to penalties: SKHTSK won 5–4")
-    const upcoming = render("Q2", "KCC", "ISS", 6)
+    const upcoming = render("Q4", "HKUGA", "CANADIAN", 9)
     expect(upcoming).toContain("Penalty shoot-out win probability")
     expect(upcoming).not.toContain("decided in normal time")
     expect(upcoming).not.toContain("ring-amber-400")
