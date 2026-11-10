@@ -32,7 +32,7 @@ const GROUPS_RAW = `
 4|6|23-10|1:30 PM|HTMS-THT|RCPHKMC|LF|3:1|
 4|7|02-11|4:15 PM|RCPHKMC|HPCCSS|KBP|0:1|
 4|8|02-11|1:30 PM|SMHYC|HTMS-THT|LF|4:0|
-4|10|07-11|9:45 AM|HTMS-THT|UCC-KE|THT||
+4|10|07-11|9:45 AM|HTMS-THT|UCC-KE|THT|0:2|
 4|9|09-11|4:15 PM|HPCCSS|SMHYC|SKM||
 5|3|28-09|2:45 PM|PCCSS|KTGS|LF|2:0|
 5|4|30-09|3:00 PM|SHSS|LKPFC|BS|14:0|
@@ -42,7 +42,7 @@ const GROUPS_RAW = `
 5|5|23-10|2:45 PM|KCS|SHSS|LF|1:0|
 5|7|02-11|2:45 PM|LKPFC|PCCSS|LF|1:7|
 5|8|02-11|4:00 PM|KCS|KTGS|LF|3:0|
-5|9|07-11|11:00 AM|PCCSS|KCS|THT||
+5|9|07-11|11:00 AM|PCCSS|KCS|THT|0:3|
 5|10|11-11|1:30 PM|KTGS|SHSS|LF||
 6|3|10-10|9:45 AM|QUALIED|HTSS-TKO|THT|5:1|
 6|4|10-10|11:00 AM|LA|LYC|THT|1:5|
@@ -65,7 +65,7 @@ export const K3: DivisionConfig = {
   title: 'Division Three (K3) · Boys A Grade',
   blurb: '6 groups in progress; knockout line-up not yet drawn',
   documentDate: '27 October 2026',
-  asOf: '2026-10-27',
+  asOf: '2026-11-09',
   groupsRaw: GROUPS_RAW,
   withdrawn: {},
   penalties: {},

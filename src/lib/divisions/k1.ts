@@ -6,8 +6,8 @@ const GROUPS_RAW = `
 1|2|02-10|4:00 PM|EVANGEL|HTYC|LF|1:0|
 1|3|14-10|4:15 PM|HTYC|STCC|KBP|1:3|
 1|4|14-10|1:30 PM|HLC|EVANGEL|LF|0:1|
-1|5|06-11|2:45 PM|STCC|EVANGEL|LF||
-1|6|06-11|4:00 PM|HTYC|HLC|LF||
+1|5|06-11|2:45 PM|STCC|EVANGEL|LF|0:2|
+1|6|06-11|4:00 PM|HTYC|HLC|LF|0:2|
 2|1|19-09|1:30 PM|WTSMC|PCMS|KTP|0:15|
 2|2|19-09|2:45 PM|KTS|CDGFSS|KTP|0:1|
 2|4|04-10|9:30 AM|WTSMC|KTS|KTP|3:3|
@@ -47,7 +47,7 @@ const GROUPS_RAW = `
 5|7|26-10|4:00 PM|PLKNO.1C|CS|LF|1:1|
 5|8|26-10|2:15 PM|SKSS|PLKNPL|PK1|5:2|
 5|9|04-11|4:00 PM|CS|SKSS|LF|1:1|
-5|10|05-11|3:00 PM|PLKNPL|NP2C|BS||
+5|10|05-11|3:00 PM|PLKNPL|NP2C|BS|3:1|
 6|1|23-09|3:00 PM|HGSS|JCGSS|BS|6:0|
 6|2|23-09|4:15 PM|CMASS|KTSS|BS|1:4|
 6|3|07-10|3:00 PM|JCGSS|HGC|BS|0:3|
@@ -67,24 +67,24 @@ export const K1: DivisionConfig = {
   region: 'Kowloon 1',
   shortName: 'D3 · Kowloon 1',
   title: 'Division Three (K1) · Boys A Grade',
-  blurb: '6 groups in progress; knockout line-up not yet drawn',
+  blurb: '6 groups, 12 teams in the final round',
   documentDate: '27 October 2026',
-  asOf: '2026-10-27',
+  asOf: '2026-11-06',
   groupsRaw: GROUPS_RAW,
   withdrawn: {},
   penalties: {},
   firstRoundName: 'Round of 12',
-  lineupConfirmed: false,
+  lineupConfirmed: true,
   results: NO_RESULTS,
   koMatches: [
-    { id: 'R1', label: 'Round of 12 – Match 1', round: 'R14', date: '2026-11-12', time: '3:00 PM', venue: 'BS', home: { t: 'pending', seed: '2nd, group to be confirmed' }, away: { t: 'pending', seed: '2nd, group to be confirmed' } },
-    { id: 'R2', label: 'Round of 12 – Match 2', round: 'R14', date: '2026-11-13', time: '1:30 PM', venue: 'LF', home: { t: 'pending', seed: '1st, group to be confirmed' }, away: { t: 'pending', seed: '2nd, group to be confirmed' } },
-    { id: 'R3', label: 'Round of 12 – Match 3', round: 'R14', date: '2026-11-13', time: '2:45 PM', venue: 'LF', home: { t: 'pending', seed: '2nd, group to be confirmed' }, away: { t: 'pending', seed: '1st, group to be confirmed' } },
-    { id: 'R4', label: 'Round of 12 – Match 4', round: 'R14', date: '2026-11-14', time: '1:30 PM', venue: 'KTP', home: { t: 'pending', seed: '2nd, group to be confirmed' }, away: { t: 'pending', seed: '2nd, group to be confirmed' } },
-    { id: 'Q1', label: 'Quarter-final 1', round: 'QF', date: '2026-11-21', time: '1:30 PM', venue: 'KTP', home: { t: 'pending', seed: '1st, group to be confirmed – bye' }, away: { t: 'w', of: 'R1' } },
-    { id: 'Q2', label: 'Quarter-final 2', round: 'QF', date: '2026-11-21', time: '2:45 PM', venue: 'KTP', home: { t: 'w', of: 'R2' }, away: { t: 'pending', seed: '1st, group to be confirmed – bye' } },
-    { id: 'Q3', label: 'Quarter-final 3', round: 'QF', date: '2026-11-22', time: '9:30 AM', venue: 'KTP', home: { t: 'pending', seed: '1st, group to be confirmed – bye' }, away: { t: 'w', of: 'R3' } },
-    { id: 'Q4', label: 'Quarter-final 4', round: 'QF', date: '2026-11-23', time: '1:30 PM', venue: 'LF', home: { t: 'w', of: 'R4' }, away: { t: 'pending', seed: '1st, group to be confirmed – bye' } },
+    { id: 'R1', label: 'Round of 12 – Match 1', round: 'R14', date: '2026-11-12', time: '3:00 PM', venue: 'BS', home: { t: 'team', team: 'HGSS', seed: '2nd, Group 6' }, away: { t: 'team', team: 'CS', seed: '2nd, Group 5' } },
+    { id: 'R2', label: 'Round of 12 – Match 2', round: 'R14', date: '2026-11-13', time: '1:30 PM', venue: 'LF', home: { t: 'team', team: 'NDC', seed: '1st, Group 4' }, away: { t: 'team', team: 'CSWCSS', seed: '2nd, Group 3' } },
+    { id: 'R3', label: 'Round of 12 – Match 3', round: 'R14', date: '2026-11-13', time: '2:45 PM', venue: 'LF', home: { t: 'team', team: 'CDGFSS', seed: '2nd, Group 2' }, away: { t: 'team', team: 'PLKVKTC', seed: '1st, Group 3' } },
+    { id: 'R4', label: 'Round of 12 – Match 4', round: 'R14', date: '2026-11-14', time: '1:30 PM', venue: 'KTP', home: { t: 'team', team: 'STCC', seed: '2nd, Group 1' }, away: { t: 'team', team: 'CCCKT', seed: '2nd, Group 4' } },
+    { id: 'Q1', label: 'Quarter-final 1', round: 'QF', date: '2026-11-21', time: '1:30 PM', venue: 'KTP', home: { t: 'team', team: 'EVANGEL', seed: '1st, Group 1 – bye' }, away: { t: 'w', of: 'R1' } },
+    { id: 'Q2', label: 'Quarter-final 2', round: 'QF', date: '2026-11-21', time: '2:45 PM', venue: 'KTP', home: { t: 'w', of: 'R2' }, away: { t: 'team', team: 'PCMS', seed: '1st, Group 2 – bye' } },
+    { id: 'Q3', label: 'Quarter-final 3', round: 'QF', date: '2026-11-22', time: '9:30 AM', venue: 'KTP', home: { t: 'team', team: 'SKSS', seed: '1st, Group 5 – bye' }, away: { t: 'w', of: 'R3' } },
+    { id: 'Q4', label: 'Quarter-final 4', round: 'QF', date: '2026-11-23', time: '1:30 PM', venue: 'LF', home: { t: 'w', of: 'R4' }, away: { t: 'team', team: 'HGC', seed: '1st, Group 6 – bye' } },
     { id: 'S1', label: 'Semi-final 1', round: 'SF', date: '2026-11-28', time: '2:15 PM', venue: 'PK1', home: { t: 'w', of: 'Q1' }, away: { t: 'w', of: 'Q2' } },
     { id: 'S2', label: 'Semi-final 2', round: 'SF', date: '2026-11-30', time: '2:15 PM', venue: 'PK1', home: { t: 'w', of: 'Q3' }, away: { t: 'w', of: 'Q4' } },
     { id: 'TP', label: 'Third-place play-off', round: 'TP', date: '2026-12-04', time: '1:30 PM', venue: 'LF', home: { t: 'l', of: 'S1' }, away: { t: 'l', of: 'S2' } },

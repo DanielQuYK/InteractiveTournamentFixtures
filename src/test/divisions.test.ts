@@ -95,7 +95,7 @@ describe('Division Two', () => {
   })
 })
 
-describe.each(['k1', 'k2', 'k3'])('%s pending bracket', (id) => {
+describe.each(['k2', 'k3'])('%s pending bracket', (id) => {
   it('shows seeds without inventing teams', () => {
     setActiveDivision(id)
     expect(ALL_KO_TEAMS.size).toBe(0)
@@ -120,6 +120,24 @@ describe.each(['k1', 'k2', 'k3'])('%s pending bracket', (id) => {
   it('has complete groups only where every game has a result', () => {
     setActiveDivision(id)
     expect(typeof groupComplete(1)).toBe('boolean')
+  })
+})
+
+describe('Division Three K1 (line-up drawn)', () => {
+  it('has the published 12-team bracket, consistent with the group tables', () => {
+    setActiveDivision('k1')
+    expect(validateQualifiers()).toEqual([])
+    expect(validateResults()).toEqual([])
+    expect(ALL_KO_TEAMS.size).toBe(12)
+    const q = (id: string) => KO_MATCHES.find((m) => m.id === id)!
+    expect([slotTeam(q('R1').home), slotTeam(q('R1').away)]).toEqual(['HGSS', 'CS'])
+    expect(slotTeam(q('Q1').home)).toBe('EVANGEL')
+    expect(slotTeam(q('Q4').away)).toBe('HGC')
+    expect(BYES).toHaveLength(4)
+    expect(BYES.every((b) => !b.pending)).toBe(true)
+    expect(MATCH_ORDER).toHaveLength(12)
+    // Every group is complete
+    for (const g of GROUPS) expect(groupComplete(g)).toBe(true)
   })
 })
 

@@ -27,7 +27,7 @@ describe('latest stage', () => {
   })
 
   it('Kowloon A Grade and every B Grade competition are still in the group stage', () => {
-    for (const id of ['k1', 'k2', 'k3', 'd1b', 'd2b', 'd3hb', 'k1b', 'k2b', 'k3b']) expect(stage(id).label).toBe('Group stage')
+    for (const id of ['k2', 'k3', 'd1b', 'd2b', 'd3hb', 'k1b', 'k2b', 'k3b']) expect(stage(id).label).toBe('Group stage')
     expect(stage('d1b').detail).toMatch(/^Awaiting the first game of 30/)
     expect(stage('d1b').tone).toBe('idle')
   })
@@ -123,10 +123,10 @@ describe('Division One', () => {
 
 describe('competitions without a knockout yet', () => {
   it('gives a provisional group-record table for Kowloon A Grade', () => {
-    setActiveDivision('k1')
+    setActiveDivision('k2')
     const lb = leaderboard('full')
     expect(lb.knockoutKnown).toBe(false)
-    expect(lb.rows.every((r) => r.status === 'Group stage')).toBe(true)
+    expect(lb.rows.filter((r) => !r.withdrawn).every((r) => r.status === 'Group stage')).toBe(true)
     expect(lb.rows[0].rank).toBe('1')
   })
 

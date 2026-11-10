@@ -1,6 +1,6 @@
 import { usePersistentState } from './lib/hooks'
 import { BackToTop } from './components/BackToTop'
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { type Detail, type Tab } from './components/shared'
 import { GroupStage } from './components/GroupStage'
 import { Knockout } from './components/Knockout'
@@ -10,6 +10,8 @@ import { TeamStats } from './components/TeamStats'
 import { Simulation } from './components/Simulation'
 import { Home } from './components/Home'
 import { Leaderboard } from './components/Leaderboard'
+import { Icon } from './components/Icon'
+import { PitchArt } from './components/PitchArt'
 import { simulationBlockers } from './lib/readiness'
 import { stageOf } from './lib/stage'
 import { activeDivision, setActiveDivision } from './lib/data'
@@ -17,10 +19,25 @@ import { divisionById } from './lib/divisions'
 
 function DivisionPage({ onHome }: { onHome: () => void }) {
   const division = activeDivision()
+  const [tab, setTab] = usePersistentState<Tab>('tab', 'group')
   const blockers = simulationBlockers()
   const stage = stageOf(division)
+  // The sliding highlight behind the selected tab follows its position and size
+  const dockRef = useRef<HTMLElement>(null)
+  const [thumb, setThumb] = useState({ left: 0, width: 0 })
   const TABS: Tab[] = ['group', 'knockout', 'leaderboard', 'stats', 'simulation']
   const TAB_NAMES: Record<Tab, string> = { group: 'Group Stage', knockout: 'Knockout', leaderboard: 'Leaderboard', stats: 'Team Stats', simulation: 'Simulation' }
+
+  useLayoutEffect(() => {
+    const place = () => {
+      const el = document.getElementById(`tab-${tab}`)
+      if (el) setThumb({ left: el.offsetLeft, width: el.offsetWidth })
+    }
+    place()
+    window.addEventListener('resize', place)
+    document.fonts?.ready.then(place)
+    return () => window.removeEventListener('resize', place)
+  }, [tab])
 
   useEffect(() => {
     document.title = `${division.title} · Inter-School Football 2026–27`
@@ -40,7 +57,6 @@ function DivisionPage({ onHome }: { onHome: () => void }) {
     setTab(TABS[next])
     document.getElementById(`tab-${TABS[next]}`)?.focus()
   }
-  const [tab, setTab] = usePersistentState<Tab>('tab', 'group')
   const [team, setTeam] = useState<string | null>(null)
   const [detail, setDetail] = useState<Detail | null>(null)
 
@@ -58,46 +74,74 @@ function DivisionPage({ onHome }: { onHome: () => void }) {
   }, [])
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 antialiased">
-      <header className="bg-emerald-950 text-white">
-        <div className="mx-auto max-w-6xl px-3 pt-8 pb-0 sm:px-5">
+    <div className="page-bg min-h-screen text-stone-900 antialiased">
+      <header className="aurora text-white">
+        <PitchArt compact />
+        <div className="mx-auto max-w-6xl px-3 pb-12 pt-6 sm:px-5 sm:pb-14 sm:pt-8">
           <button
             onClick={onHome}
-            className="liquid liquid-dark -ml-2 mb-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-emerald-200 hover:text-white"
+            className="glass-dark inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium text-emerald-100 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300"
           >
-            <span aria-hidden="true">←</span> All competitions
+            <Icon name="back" size={14} /> All competitions
           </button>
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-300">Inter-School Football Competition 2026–2027</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{division.title}</h1>
-          <p className="mt-1 text-sm text-emerald-200/80">
-            {division.region ? `${division.region} · ` : ''}{division.koMatches.length > 0 ? 'Group stage results and final round (single knock-out)' : 'Group stage fixtures and results'}{division.documentDate ? ` · fixtures as published ${division.documentDate}` : ''}
-          </p>
-          <p className="mt-3 inline-flex max-w-full flex-wrap items-baseline gap-x-2 rounded-lg bg-emerald-900/60 px-3 py-1.5 text-xs text-emerald-100">
-            <span className="font-semibold uppercase tracking-widest text-emerald-300">Latest stage</span>
-            <span className="font-semibold text-white">{stage.label}</span>
+          <p className="mt-5 text-[11px] font-medium uppercase tracking-[0.2em] text-emerald-300">Inter-School Football Competition 2026–2027</p>
+          <h1 className="mt-2 text-3xl font-semibold leading-tight sm:text-5xl">
+            <span className="text-gradient">{division.title}</span>
+          </h1>
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+            {division.region && (
+              <span className="glass-dark inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-emerald-100"><Icon name="pin" size={13} /> {division.region}</span>
+            )}
+            <span className="glass-dark inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-emerald-100">
+              <Icon name="school" size={13} />
+              {division.koMatches.length > 0 ? 'Group stage and single knock-out final round' : 'Group stage fixtures and results'}
+            </span>
+            {division.documentDate && (
+              <span className="glass-dark inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-emerald-100"><Icon name="clock" size={13} /> Fixtures as published {division.documentDate}</span>
+            )}
+          </div>
+          <p className="glass-dark mt-4 inline-flex max-w-full flex-wrap items-baseline gap-x-2.5 gap-y-0.5 rounded-2xl px-4 py-2.5 text-xs text-emerald-100">
+            <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-widest text-emerald-300">
+              <span className={`live-dot text-emerald-400 ${stage.tone === 'active' ? '' : '[&::after]:hidden'}`} aria-hidden="true" /> Latest stage
+            </span>
+            <span className="font-display text-base font-semibold text-white">{stage.label}</span>
             <span className="text-emerald-200/90">{stage.detail}</span>
           </p>
-          <nav className="-mx-2 mt-5 flex gap-1 overflow-x-auto px-2 pt-2" role="tablist" aria-label="Competition sections">
-            {TABS.map((t, i) => (
-              <button
-                key={t}
-                id={`tab-${t}`}
-                role="tab"
-                aria-selected={tab === t}
-                aria-controls="tab-panel"
-                tabIndex={tab === t ? 0 : -1}
-                onClick={() => setTab(t)}
-                onKeyDown={(e) => onTabKey(e, i)}
-                className={`main-tab liquid liquid-dark shrink-0 whitespace-nowrap rounded-t-lg px-5 py-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-emerald-300 ${
-                  tab === t ? 'bg-stone-50 text-emerald-950' : 'text-emerald-100'
-                }`}
-              >
-                {TAB_NAMES[t]}
-              </button>
-            ))}
-          </nav>
         </div>
       </header>
+
+      <div className="sticky top-3 z-30 -mt-6 px-3 sm:px-5">
+        <nav
+          ref={dockRef}
+          className="dock relative mx-auto flex w-fit max-w-full gap-1 overflow-x-auto rounded-full p-1.5"
+          role="tablist"
+          aria-label="Competition sections"
+        >
+          <span
+            aria-hidden="true"
+            className="dock-thumb pointer-events-none absolute bottom-1.5 top-1.5 rounded-full"
+            style={{ left: thumb.left, width: thumb.width, opacity: thumb.width ? 1 : 0 }}
+          />
+          {TABS.map((t, i) => (
+            <button
+              key={t}
+              id={`tab-${t}`}
+              role="tab"
+              aria-selected={tab === t}
+              aria-controls="tab-panel"
+              tabIndex={tab === t ? 0 : -1}
+              onClick={() => setTab(t)}
+              onKeyDown={(e) => onTabKey(e, i)}
+              className={`tab-pill relative z-10 inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
+                tab === t ? 'text-white' : 'text-stone-600 hover:text-emerald-900'
+              }`}
+            >
+              <Icon name={t} size={15} />
+              {TAB_NAMES[t]}
+            </button>
+          ))}
+        </nav>
+      </div>
 
       <main id="tab-panel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="mx-auto max-w-6xl px-3 py-6 sm:px-5 sm:py-8">
         {tab === 'group' ? (

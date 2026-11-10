@@ -54,9 +54,9 @@ export function TeamPanel({ team, onClose, onTeam }: { team: string; onClose: ()
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex justify-end bg-stone-900/40" onClick={onClose}>
-      <aside ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${team} fixtures`} className="isolate h-full outline-none w-full max-w-xl overflow-y-auto bg-stone-50 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 z-30 flex items-start justify-between border-b border-emerald-900 bg-emerald-950 px-6 py-5 text-white shadow-sm">
+    <div className="fixed inset-0 z-30 flex justify-end bg-emerald-950/40 backdrop-blur-sm" onClick={onClose}>
+      <aside ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${team} fixtures`} className="isolate h-full outline-none w-full max-w-xl overflow-y-auto bg-stone-50/90 shadow-2xl backdrop-blur-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-30 flex items-start justify-between border-b border-emerald-800 bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-900 px-6 py-5 text-white shadow-sm">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Team fixtures</p>
             <h2 className="text-2xl font-semibold">{team}</h2>
